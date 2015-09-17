@@ -58,7 +58,8 @@
 
 ;;; Constant data defined
 
-
+(define W 600)
+(define H 800)
 
 
 
