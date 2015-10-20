@@ -57,11 +57,9 @@
 (define W 600)
 (define H 800)
 
-(define straight-road (beside (rectangle (* 1/6 W) (* 3 800) 'solid 'green)
-                              (rectangle (* 2/3 W) (* 3 800) 'solid 'black)
-                              (rectangle (* 1/6 W) (* 3 800) 'solid 'green)))
-;; BG for now. need to make curvy road images and place them above straight-road
-(define BG straight-road)
+#;(define straight-road (beside (rectangle (* 1/6 W) (* 3 800) 'solid 'green)
+                                (rectangle (* 2/3 W) (* 3 800) 'solid 'black)
+                                (rectangle (* 1/6 W) (* 3 800) 'solid 'green)))
 
 ;; spy car -- BASE POS. OF STRIPES + ROOF OFF W AND H
 (define spy-body (rectangle (* 1/20 W) (* 1/15 H) 'solid 'burlywood))
@@ -160,47 +158,20 @@
 (define frnd-vel 20)
 |#
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Terrain
+(define terrain (beside (rectangle (* 1/6 W) (* 1/4 H) 'solid 'green)
+                        (rectangle (* 2/3 W) (* 1/4 H) 'solid 'black)
+                        (rectangle (* 1/6 W) (* 1/4 H) 'solid 'green)))
 
-;;world defintion
-
-;; A SpyGame is a
-;; (make-splash Image) or  TODO: make splashscreen
-;; (make-shg Nat Nat Nat Nat spy List-of[Object]) or
-;; (make-firing-shg Nat Nat Nat spy List-of[Object] List-of[Bullets]) or a 
-;; (make-gameover Image Nat)
-
-(define-struct splash [bg])
-;; where bg is an image set as the splashscreen
-
-(define-struct shg [lives score spy LOO])
-;; where lives is the number of lives a player has left and
-;; score is the player's score,
-;; LOO is a list of all the objects in the game
-
-(define-struct firing-shg [lives score spy LOO LOB])
-;;where lives is the number of lives a player has left and
-;; score is the player's score,
-;; LOO is a list of all the objects in the game
-;; LOB is a list of the players shot
-
-(define-struct gameover [bg score])
-;; were bg is the gameover image
-
-;; fun-for-shg: shg --> ?
-#; (define (fun-for-shg s)
-     (... (shg-lives s) ...
-          (shg-score s) ...
-          (shg-spy s) ...
-          (shg-LOO s) ...))
-;; fun-for-firing-shg: firing-shg --> ?
-#; (define (fun-for-firing-shg f)
-     (... (firing-shg-lives f) ...
-          (firing-shg-score f) ...
-          (firing-shg-spy f) ...
-          (firing-shg-LOO f) ...
-          (firing-shg LOB) ...))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; a spy is a
+;; (make-spy Num Num Nat Num Num)
+(define-struct spy [x y vel osleft ssleft])
+;; where x is the spy's x coordinate,
+;; y is the car's y coordinate,
+;; vel is the spy's velocity,
+;; osleft is the number of oilslicks the spy has,
+;; and ssleft is the number of smokescreens the spy has left.
+(define spy1 (make-spy 300 400 0 0 0))
 
 ;; an object is one of
 ;; - FriendlyCar
@@ -239,6 +210,50 @@
 ;; x is the shots y coordinate, and
 ;; vel is the shot's velocity
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;world defintion
+
+;; A SpyGame is a
+;; (make-splash Image) or  TODO: make splashscreen
+;; (make-shg Nat Nat Nat Nat spy List-of[Object]) or
+;; (make-firing-shg Nat Nat Nat spy List-of[Object] List-of[Bullets]) or a 
+;; (make-gameover Image Nat)
+
+(define-struct splash [bg])
+;; where bg is an image set as the splashscreen
+
+(define-struct shg [lives score spy LOO])
+;; where lives is the number of lives a player has left and
+;; score is the player's score,
+;; LOO is a list of all the objects in the game
+;; example shg
+(define shg1 (make-shg 3 0 spy1 empty))
+
+(define-struct firing-shg [lives score spy LOO LOB])
+;;where lives is the number of lives a player has left and
+;; score is the player's score,
+;; LOO is a list of all the objects in the game
+;; LOB is a list of the players shot
+
+(define-struct gameover [bg score])
+;; were bg is the gameover image
+
+;; fun-for-shg: shg --> ?
+#; (define (fun-for-shg s)
+     (... (shg-lives s) ...
+          (shg-score s) ...
+          (shg-spy s) ...
+          (shg-LOO s) ...))
+;; fun-for-firing-shg: firing-shg --> ?
+#; (define (fun-for-firing-shg f)
+     (... (firing-shg-lives f) ...
+          (firing-shg-score f) ...
+          (firing-shg-spy f) ...
+          (firing-shg-LOO f) ...
+          (firing-shg LOB) ...))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 #|
 
 ;;Wishlist
@@ -253,6 +268,7 @@
    - accelerate
 
 -- draw handler
+   - generate background ;; WHERE TO INCLUDE THIS?
 
 -- tick handler
    - AI
@@ -262,10 +278,28 @@
 
 |#
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Render Handler
+
+;; generate-road: Image --> Image ;; HOW TO REPRESENT ROAD
+(define (generate-road img)
+  ...)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Key Handler
 
 ;; handle-key: key SpyGame --> SpyGame
 ;; performs a keys proper action to produce the next SpyGame
+(define (handle-key sg)
+  ...)
+
+;; start-game: key SpyGame --> SpyGame
+;; if the SpyGame is a (make-splash ...) it starts the game with a
+;; (make-shg ...). if not, then nothing occurs
+
+(define (start-game k sg)
+  (if (splash? sg)
+      shg1
+      sg))
+
 
 
 
