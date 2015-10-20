@@ -57,6 +57,10 @@
 (define W 600)
 (define H 800)
 
+(define splash-Image (overlay (text "Spy Hunter" 36 'red)
+                              (beside (rectangle (* 1/6 W) H 'solid 'green)
+                                      (rectangle (* 2/3 W) H 'solid 'black)
+                                      (rectangle (* 1/6 W) H 'solid 'green))))
 #;(define straight-road (beside (rectangle (* 1/6 W) (* 3 800) 'solid 'green)
                                 (rectangle (* 2/3 W) (* 3 800) 'solid 'black)
                                 (rectangle (* 1/6 W) (* 3 800) 'solid 'green)))
@@ -178,11 +182,10 @@
 ;; - EnemyCar
 ;; - hlpr-truck
 ;; - oilslick
-;; - smokescreen
 
 ;; a List-of[Objects] (LOO) is one of:
 ;; empty
-;; (cons object empty)
+;; (cons object LOO)
 
 ;; a FriendlyCar is a
 ;; (make-FriendlyCar Nat Num Num)
@@ -210,6 +213,32 @@
 ;; x is the shots y coordinate, and
 ;; vel is the shot's velocity
 
+;; oilslick is a 
+;; (make-os Num Num)
+(define-struct os [x y])
+;; where x is the oilslick's x coordinate and
+;;       y is the oilslick's y coordinate
+
+;; a Listof[Num] (LON) is either
+;; empty
+;; (cons Num LON)
+#;(define (fun-for-LON ls)
+    (cond [(empty? ls) ...]
+          [(cons? ls) ...]))
+;; a bullet is a 
+;; (make-bullet Num Num Nat)
+(define-struct fbullet [x y vel])
+;; where x is the bullets x coordinate
+;;       y is the bullets y coordinate
+;;     and vel is the bullets velocity
+(define fbullet1 (make-fbullet 150 380 39))
+(define fbullet2 (make-fbullet 150 370 40))
+(define fbullet3 (make-fbullet 165 360 12))
+
+;; a Listof[Fbullets] (LOF) is either ;;DOESN'T THIS ELIMINATE THE NEED FOR A FIRING-SHG???
+;; empty or
+;; (cons bullet LOF)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;world defintion
@@ -217,7 +246,7 @@
 ;; A SpyGame is a
 ;; (make-splash Image) or  TODO: make splashscreen
 ;; (make-shg Nat Nat Nat Nat spy List-of[Object]) or
-;; (make-firing-shg Nat Nat Nat spy List-of[Object] List-of[Bullets]) or a 
+;; (make-firing-shg Nat Nat Nat spy List-of[Object] List-of[Fbullets]) or a 
 ;; (make-gameover Image Nat)
 
 (define-struct splash [bg])
@@ -230,11 +259,12 @@
 ;; example shg
 (define shg1 (make-shg 3 0 spy1 empty))
 
-(define-struct firing-shg [lives score spy LOO LOB])
+(define-struct firing-shg [lives score spy LOO LOF])
 ;;where lives is the number of lives a player has left and
 ;; score is the player's score,
 ;; LOO is a list of all the objects in the game
-;; LOB is a list of the players shot
+;; LOF is a list of the players shot
+(define firing-shg1 (make-firing-shg 3 0 spy1 empty (list fbullet1 fbullet2)))
 
 (define-struct gameover [bg score])
 ;; were bg is the gameover image
@@ -278,6 +308,33 @@
 
 |#
 
+;; endgame?: SpyGame --> Boolean
+;; determines if the game should end
+;; the game ends when lives < 0
+
+;; checks for shg
+(check-expect (endgame? shg1) false)
+
+;; checks for firing-shg
+(check-expect (endgame? firing-shg1) false)
+
+;; checks for splash (splash should always result false)
+(check-expect (endgame? (make-splash spy-car)) ;; just chose a random image
+              false)
+(check-expect (endgame? (make-shg 0 5003 spy1 empty)) false)
+(check-expect (endgame? (make-shg -1 5003 spy1 empty)) true)
+
+;; checks for gamover (gameover should always result false)
+(check-expect (endgame? (make-gameover spy-car 100)) false) ;; TODO: add more tests if keep firing-shg
+
+(define (endgame? sg)
+  (cond [(splash? sg) false]
+        [(gameover? sg) false]
+        [(shg? sg)
+         (< (shg-lives sg) 0)]
+        [(firing-shg? sg)
+         (< (firing-shg-lives sg) 0)]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Render Handler
 
 ;; generate-road: Image --> Image ;; HOW TO REPRESENT ROAD
@@ -286,10 +343,40 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Key Handler
 
+;; a KeyEvent is one of
+;; "w" moving the spy forward
+;; "a" moving the spy left
+;; "d" moving the spy right
+;; "e" deploying an oilslick to the road
+;; "q" deploying a smokescreen behind spy
+;; "shift" accelerating spy to maximum speed
+;; " " firing bullets from spy
+;; or any other key which switches
+         ; splash --> gameover or
+         ; gameover --> splash
+
 ;; handle-key: key SpyGame --> SpyGame
-;; performs a keys proper action to produce the next SpyGame
-(define (handle-key sg)
-  ...)
+;; performs a key's proper function to produce the next SpyGame
+(define (handle-key k sg)
+  (cond [(splash? sg) shg1] ;; on any-key it makes the starting shg
+        [(gameover? sg) (make-splash splash-Image)]
+        [(shg? sg)
+         (cond [(key=? "w" k) ...] ;; sustained key pressing?
+               [(key=? "a" k) (make-shg (shg-lives sg)
+                                        (shg-score sg)
+                                        (make-spy (- (spy-x (shg-spy sg))
+                                                     10)
+                                                  (spy-y (shg-spy sg))
+                                                  (spy-osleft (shg-spy sg))
+                                                  (spy-ssleft (shg-spy sg)))
+                                        (shg-LOO sg))]
+               [(key=? "d" k) ...]
+               [(key=? "e" k) ...]
+               [(key=? "q" k) ...]
+               [(key=? "shift" k) ...] ;; sustained key pressing?
+               [(key=? " " k) ...]
+               [else sg])]
+        [(firing-shg? sg) ...])) ;; TODO: probably remove this
 
 ;; start-game: key SpyGame --> SpyGame
 ;; if the SpyGame is a (make-splash ...) it starts the game with a
