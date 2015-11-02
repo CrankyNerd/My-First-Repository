@@ -55,7 +55,12 @@
 (define W 600)
 (define H 800)
 
+;; BG
+(define BG (beside (rectangle (* 1/6 W) (* 3 H) 'solid 'green)
+                   (rectangle (* 2/3 W) (* 3 H) 'solid 'black)
+                   (rectangle (* 1/6 W) (* 3 H) 'solid 'green)))
 ;; plain-bg
+;; this is like BG, but it is fit to the 600 800 screen already
 (define plain-bg (beside (rectangle (* 1/6 W) H 'solid 'green)
                          (rectangle (* 2/3 W) H 'solid 'black)
                          (rectangle (* 1/6 W) H 'solid 'green)))
@@ -191,6 +196,7 @@
 ;; osleft is the number of oilslicks the spy has,
 ;; and ssleft is the number of smokescreens the spy has left.
 (define spy1 (make-spy 300 400 0 0 0))
+(define spy2 (make-spy 200 400 11 2 3))
 
 ;; an object is one of
 ;; - FriendlyCar
@@ -261,14 +267,14 @@
 ;; a Listof[Shot] (LOS) is either
 ;; empty or
 ;; (cons shot LOS)
-(define los1 '(shot1 shot2 shot3))
+(define los1 (list shot1 shot2 shot3))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;world defintion
 
 ;; A SpyGame is a
-;; (make-splash Image) or  TODO: make splashscreen
+;; (make-splash Image) or
 ;; (make-shg Nat Nat Nat Nat spy List-of[Object Lis-of[Shot] Num]) or
 ;; (make-gameover Image Nat)
 
@@ -284,9 +290,10 @@
 ;;     the top of the screen is at y=0
 ;; example shg
 (define shg1 (make-shg 3 0 spy1 empty empty -10))
-(define shg2 (make-shg 2 7 spy1 empty empty -3))
+(define shg2 (make-shg 2 45 spy2 LOO1 los1 -20))
 (define shg3 (make-shg 1 10 spy1 empty empty -1))
-(define shg4 (make-shg 0 293 spy1 empty empty -5))
+(define shg4 (make-shg 0 293 spy1 empty empty 900))
+(define shg5 (make-shg 2 45 spy2 LOO1 los1 0))
 
 (define-struct gameover [bg score])
 ;; were bg is the gameover image
@@ -314,8 +321,7 @@
    - go forward
    - accelerate
 
--- draw handler
-   - generate background ;; WHERE TO INCLUDE THIS?
+-- draw handler   ;;; DONE!
 
 -- tick handler
    - AI
@@ -353,10 +359,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Render Handler
 
-;; generate-road: SpyGame --> Image
-(define (generate-road img)
-  ...)
-
 ;; render: SpyGame --> Image
 ;; renders all visual components of a SpyGame into an image
 ;check-expects for splash
@@ -383,15 +385,40 @@
                               (text "GAME OVER" 48 'red)
                               (text  "2000874" 48 'green))
                        plain-bg))
-
+; check-expects for shg
+;;(check-expect (render shg5) (bitmap "SHG5_Render.png")) 
+;; doesn't work because render is cropping the whole BG and SHG5_Render is
+;;         after the initial crop. render works fine.
 (define (render sg)
   (cond [(splash? sg) splash-image]
-        [(shg? sg) ...]
+        [(shg? sg) (draw-score sg
+                               (draw-lives sg
+                                           (draw-LOO
+                                            (shg-objects sg)
+                                            (draw-spy
+                                             (shg-spy sg)
+                                             (draw-os
+                                              (shg-spy sg)
+                                              (draw-ss
+                                               (shg-spy sg)
+                                               (draw-shot
+                                                (shg-shots sg)
+                                                (draw-bg sg))))))))]
         [(gameover? sg) (overlay (above (text "Spy Hunter" 36 'red)
                                         (text "GAME OVER" 48 'red)
                                         (text (number->string
                                                (gameover-score sg)) 48 'green))
                                  plain-bg)]))
+
+;; draw-bg: shg --> Image
+(define (wrap-y sg) (remainder (+ (image-height BG) (shg-dtop sg))
+                               (image-height BG)))
+(define (draw-bg sg)
+  (if (> (+ (wrap-y sg) H)
+         (image-height BG))
+      (above (crop 0 (wrap-y sg) W (- (image-height BG) (wrap-y sg)) BG)
+             (crop 0 0 W (- H (- (image-height BG) (wrap-y sg))) BG))
+      (crop 0 (shg-dtop sg) W H BG)))
 ;; draw-score: SpyGame Image --> Image
 ;; draws the player's score in top right
 (check-expect (draw-score shg1 plain-bg)
@@ -539,13 +566,32 @@
   (cond [(splash? sg) shg1] ;; on any-key it makes the starting shg
         [(gameover? sg) (make-splash splash-image)] ;; on any-key goes to splash
         [(shg? sg)
-         (cond [(key=? "w" k) ...] ;;TODO
-               [(key=? "s" k) ...]
+         (cond [(key=? "w" k) (make-shg (shg-lives sg)
+                                        (shg-score sg)
+                                        (make-spy (spy-x (shg-spy sg))  
+                                                  (spy-y (shg-spy sg))
+                                                  (+ 10 (spy-vel (shg-spy sg)))
+                                                  (spy-osleft (shg-spy sg))
+                                                  (spy-ssleft (shg-spy sg)))
+                                        (shg-objects sg)
+                                        (shg-shots sg)
+                                        (shg-dtop sg))]
+               [(key=? "s" k) (make-shg (shg-lives sg)
+                                        (shg-score sg)
+                                        (make-spy (spy-x (shg-spy sg))  
+                                                  (spy-y (shg-spy sg))
+                                                  (- (spy-vel (shg-spy sg)) 10)
+                                                  (spy-osleft (shg-spy sg))
+                                                  (spy-ssleft (shg-spy sg)))
+                                        (shg-objects sg)
+                                        (shg-shots sg)
+                                        (shg-dtop sg))]
                [(key=? "a" k) (make-shg (shg-lives sg)
                                         (shg-score sg)
                                         (make-spy (- (spy-x (shg-spy sg))
                                                      10)
                                                   (spy-y (shg-spy sg))
+                                                  (spy-vel (shg-spy sg))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
@@ -556,6 +602,7 @@
                                         (make-spy (+ (spy-x (shg-spy sg))
                                                      10)
                                                   (spy-y (shg-spy sg))
+                                                  (spy-vel (shg-spy sg))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
@@ -565,6 +612,7 @@
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
                                                   (spy-y (shg-spy sg))
+                                                  (spy-vel (shg-spy sg))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (cons (make-os (spy-x (shg-spy sg))
@@ -576,6 +624,7 @@
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
                                                   (spy-y (shg-spy sg))
+                                                  (spy-vel (shg-spy sg))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (cons (make-ss (spy-x (shg-spy sg))
@@ -588,6 +637,7 @@
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
                                                   (spy-y (shg-spy sg))
+                                                  (spy-vel (shg-spy sg))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
