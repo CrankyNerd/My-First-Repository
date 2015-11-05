@@ -1,6 +1,6 @@
 ;; The first three lines of this file were inserted by DrRacket. They record metadata
 ;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-intermediate-lambda-reader.ss" "lang")((modname SpyHunter) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f ())))
+#reader(lib "htdp-advanced-reader.ss" "lang")((modname SpyHunter) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f ())))
 (require 2htdp/image)
 (require 2htdp/universe)
 #|
@@ -12,20 +12,20 @@
 -- player's car       ;;DONE
   -crash image
 -- helper truck       ;;DONE
-  - oil slick icon
-  - smoke screen icon
+  - oil slick icon    ;;DONE
+  - smoke screen icon ;;DONE
 -- small enemy        ;;DONE
   -crash image
 -- bullet-proof enemy ;;DONE
   -crash image
 
--- Background
--- splashscreen
--- gameover
+-- Background         ;;DONE
+-- splashscreen       ;;DONE
+-- gameover           ;;DONE
 
 -- Bullet             ;;DONE
--- oil slick
--- smoke screen
+-- oil slick          ;;DONE
+-- smoke screen       ;;DONE
 
 ;;; others
 
@@ -55,6 +55,9 @@
 (define W 600)
 (define H 800)
 
+(define MAX-SSD 5)
+(define START-VEL 30)
+
 ;; BG
 (define BG (beside (rectangle (* 1/6 W) (* 3 H) 'solid 'green)
                    (rectangle (* 2/3 W) (* 3 H) 'solid 'black)
@@ -68,7 +71,12 @@
 ;; splash-screen image
 (define splash-image (overlay (text "Spy Hunter" 36 'red)
                               plain-bg))
-
+;; EXAMPLE --- gameover-screen image
+;; GAMEOVER IMAGES ARE NOT STATIC SO THEY ARE MADE IN THE RENDER FUNCTION
+(define gameover-image (overlay (above (text "Game Over" 48 'red)
+                                       (text "Spy Hunter" 36 'blue)
+                                       (text "100000" 48 'red))
+                                plain-bg))
 ;; os-image
 ;; the image for an oilslick
 (define os-image (rectangle (* 1/20 W) (* 1/15 H) 'solid 'gray))
@@ -267,7 +275,7 @@
 ;; a Listof[Shot] (LOS) is either
 ;; empty or
 ;; (cons shot LOS)
-(define los1 (list shot1 shot2 shot3))
+(define LOS1 (list shot1 shot2 shot3))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -290,13 +298,13 @@
 ;;     the top of the screen is at y=0
 ;; example shg
 (define shg1 (make-shg 3 0 spy1 empty empty -10))
-(define shg2 (make-shg 2 45 spy2 LOO1 los1 -20))
+(define shg2 (make-shg 2 45 spy2 LOO1 LOS1 -20))
 (define shg3 (make-shg 1 10 spy1 empty empty -1))
 (define shg4 (make-shg 0 293 spy1 empty empty 900))
-(define shg5 (make-shg 2 45 spy2 LOO1 los1 0))
+(define shg5 (make-shg 2 45 spy2 LOO1 LOS1 0))
 
-(define-struct gameover [bg score])
-;; were bg is the gameover image
+(define-struct gameover [score])
+;; where score is the score the player had when they died
 
 ;; fun-for-shg: shg --> ?
 #; (define (fun-for-shg s)
@@ -312,7 +320,7 @@
 
 ;;Wishlist
 
--- key handler
+-- key handler    ;;; DONE!
    - shoot
    - deploy oilslick
    - deploy smokescreen
@@ -328,6 +336,8 @@
    - place friendly cars offscreen
    - place enemy cars offscreen
    - place helpertrucks offscreen
+   - move everything
+   - collisions
 
 |#
 
@@ -342,14 +352,14 @@
 (check-expect (endgame? (make-splash spy-car)) ;; just chose a random image
               false)
 (check-expect (endgame? (make-shg 0 5003 spy1 empty empty -20)) false)
-(check-expect (endgame? (make-shg 2 563 spy1 empty los1 0)) false)
+(check-expect (endgame? (make-shg 2 563 spy1 empty LOS1 0)) false)
 (check-expect (endgame? (make-shg -1 5003 spy1 '((make-os 400 400)
                                                  (make-os 420 380)
                                                  (make-FrendlyCar 200 600 40))
                                   empty -1)) true)
 
 ;; checks for gamover (gameover should always result false)
-(check-expect (endgame? (make-gameover spy-car 100)) false)
+(check-expect (endgame? (make-gameover 100)) false)
 
 (define (endgame? sg)
   (cond [(splash? sg) false]
@@ -365,30 +375,51 @@
 (check-expect (render (make-splash splash-image)) splash-image)
 (check-expect (render (make-splash spy-car)) splash-image)
 ; check-expects for gameover
-(check-expect (render (make-gameover spy-car 0))
+(check-expect (render (make-gameover 0))
               (overlay (above (text "Spy Hunter" 36 'red)
                               (text "GAME OVER" 48 'red)
                               (text  "0" 48 'green))
                        plain-bg))
-(check-expect (render (make-gameover spy-body 3))
+(check-expect (render (make-gameover 3))
               (overlay (above (text "Spy Hunter" 36 'red)
                               (text "GAME OVER" 48 'red)
                               (text  "3" 48 'green))
                        plain-bg))
-(check-expect (render (make-gameover spy-car 211))
+(check-expect (render (make-gameover 211))
               (overlay (above (text "Spy Hunter" 36 'red)
                               (text "GAME OVER" 48 'red)
                               (text  "211" 48 'green))
                        plain-bg))
-(check-expect (render (make-gameover spy-car 2000874))
+(check-expect (render (make-gameover 2000874))
               (overlay (above (text "Spy Hunter" 36 'red)
                               (text "GAME OVER" 48 'red)
                               (text  "2000874" 48 'green))
                        plain-bg))
 ; check-expects for shg
-;;(check-expect (render shg5) (bitmap "SHG5_Render.png")) 
-;; doesn't work because render is cropping the whole BG and SHG5_Render is
-;;         after the initial crop. render works fine.
+(check-expect (render shg1)
+              (draw-score shg1
+                          (draw-lives shg1
+                                      (draw-spy
+                                       (shg-spy shg1)
+                                       (draw-os
+                                        (shg-spy shg1)
+                                        (draw-ss
+                                         (shg-spy shg1)
+                                         (draw-bg shg1)))))))
+(check-expect (render shg5) 
+              (draw-score shg5
+                          (draw-lives shg5
+                                      (draw-LOO
+                                       (shg-objects shg5)
+                                       (draw-spy
+                                        (shg-spy shg5)
+                                        (draw-os
+                                         (shg-spy shg5)
+                                         (draw-ss
+                                          (shg-spy shg5)
+                                          (draw-shot
+                                           (shg-shots shg5)
+                                           (draw-bg shg5)))))))))
 (define (render sg)
   (cond [(splash? sg) splash-image]
         [(shg? sg) (draw-score sg
@@ -411,6 +442,15 @@
                                  plain-bg)]))
 
 ;; draw-bg: shg --> Image
+;; draws the bg with proper dimensions using the BG
+(check-expect (draw-bg shg1) (above (crop 0 (- (image-height BG) 10) W 10
+                                          BG)
+                                    (crop 0 0 W (- H 10) BG)))
+(check-expect (draw-bg shg4) (crop 0 900 W H BG))
+(check-expect (draw-bg shg5) (crop 0 0 W H BG))
+;helper function wrap: shg --> Num+
+; finds the y value where you want the screen to start from
+; the dtop parameter of an shg
 (define (wrap-y sg) (remainder (+ (image-height BG) (shg-dtop sg))
                                (image-height BG)))
 (define (draw-bg sg)
@@ -419,7 +459,7 @@
       (above (crop 0 (wrap-y sg) W (- (image-height BG) (wrap-y sg)) BG)
              (crop 0 0 W (- H (- (image-height BG) (wrap-y sg))) BG))
       (crop 0 (shg-dtop sg) W H BG)))
-;; draw-score: SpyGame Image --> Image
+;; draw-score: shg Image --> Image
 ;; draws the player's score in top right
 (check-expect (draw-score shg1 plain-bg)
               (place-image (text "0" 30 'white)
@@ -431,7 +471,7 @@
                (* 7/8 W) 25
                bg))
 
-;; draw-livesleft: SpyGame --> Image
+;; draw-livesleft: shg --> Image
 ;; draws a small car for each life the player has left
 (define mini-car-spacer (rectangle (* 1/60 W) 0 'solid 'beige))
 (check-expect (draw-livesleft shg1) (beside mini-car mini-car-spacer
@@ -456,7 +496,7 @@
                                                 (shg-objects sg)
                                                 (shg-shots sg)
                                                 (shg-dtop sg))))]))
-;; draw-lives SpyGames Image --> Image
+;; draw-lives shg Image --> Image
 ;; draws the livesleft image onto the bg
 (check-expect (draw-lives shg1 splash-image)
               (place-image (draw-livesleft shg1)
@@ -537,6 +577,11 @@
 
 ;; draw-shot: LOS Image --> Image
 ;; draws the shot contained in the SpyGame's LOS
+(check-expect (draw-shot LOS1 plain-bg)
+              (place-image player-shot 150 380
+                           (place-image player-shot 150 360
+                                        (place-image player-shot 150 340 
+                                                     plain-bg))))
 (define (draw-shot ls bg)
   (cond [(empty? ls) bg]
         [(cons? ls) (draw-shot (rest ls)
@@ -562,6 +607,54 @@
 
 ;; handle-key: key SpyGame --> SpyGame
 ;; performs a key's proper function to produce the next SpyGame
+(check-expect (handle-key "w" (make-splash splash-image))
+              shg1)
+(check-expect (handle-key "s" (make-splash splash-image))
+              shg1)
+(check-expect (handle-key "d" (make-splash splash-image))
+              shg1)
+(check-expect (handle-key "a" (make-splash splash-image))
+              shg1)
+(check-expect (handle-key "o" (make-splash splash-image))
+              shg1)
+(check-expect (handle-key "w" (make-gameover 100))
+              (make-splash splash-image))
+(check-expect (handle-key "s" (make-gameover 100))
+              (make-splash splash-image))
+(check-expect (handle-key "d" (make-gameover 100))
+              (make-splash splash-image))
+(check-expect (handle-key "a" (make-gameover 100))
+              (make-splash splash-image))
+(check-expect (handle-key "i" (make-gameover 100))
+              (make-splash splash-image))
+(check-expect (handle-key "w" shg1)
+              (make-shg 3 0 (make-spy 300 400 10 0 0) empty empty -10))
+(check-expect (handle-key "s" shg2)
+              (make-shg 2 45 (make-spy 200 400 1 2 3) LOO1 LOS1 -20))
+(check-expect (handle-key "a" shg1)
+              (make-shg 3 0 (make-spy 290 400 0 0 0) empty empty -10))
+(check-expect (handle-key "d" shg2)
+              (make-shg 2 45 (make-spy 210 400 11 2 3) LOO1 LOS1 -20))
+(check-expect (handle-key "e" shg1)
+              (make-shg 3 0 (make-spy 300 400 0 0 0) empty empty -10))
+(check-expect (handle-key "e" shg2)
+              (make-shg 2 45 (make-spy 200 400 11 1 3)
+                        (cons (make-os 200 400) LOO1) LOS1 -20))
+(check-expect (handle-key "q" shg1)
+              (make-shg 3 0 (make-spy 300 400 0 0 0) empty empty -10))
+(check-expect (handle-key "q" shg2)
+              (make-shg 2 45 (make-spy 200 400 11 2 2)
+                        (cons (make-ss 200 (+ 400 (/ (image-height spy-car) 2))
+                                       MAX-SSD) LOO1) LOS1 -20))
+(check-expect (handle-key " " shg1)
+              (make-shg 3 0 (make-spy 300 400 0 0 0) empty
+                        (cons (make-shot 300 (- 400
+                                                (/ (image-height spy-car) 2)
+                                                )) empty) -10))
+(check-expect (handle-key "p" shg1)
+              shg1)
+(check-expect (handle-key "h" shg1)
+              shg1)
 (define (handle-key k sg)
   (cond [(splash? sg) shg1] ;; on any-key it makes the starting shg
         [(gameover? sg) (make-splash splash-image)] ;; on any-key goes to splash
@@ -570,7 +663,8 @@
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
                                                   (spy-y (shg-spy sg))
-                                                  (+ 10 (spy-vel (shg-spy sg)))
+                                                  (accelerate
+                                                   (spy-vel (shg-spy sg)))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
@@ -580,7 +674,8 @@
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
                                                   (spy-y (shg-spy sg))
-                                                  (- (spy-vel (shg-spy sg)) 10)
+                                                  (decelerate
+                                                   (spy-vel (shg-spy sg)))
                                                   (spy-osleft (shg-spy sg))
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
@@ -608,31 +703,8 @@
                                         (shg-objects sg)
                                         (shg-shots sg)
                                         (shg-dtop sg))]
-               [(key=? "e" k) (make-shg (shg-lives sg)
-                                        (shg-score sg)
-                                        (make-spy (spy-x (shg-spy sg))  
-                                                  (spy-y (shg-spy sg))
-                                                  (spy-vel (shg-spy sg))
-                                                  (spy-osleft (shg-spy sg))
-                                                  (spy-ssleft (shg-spy sg)))
-                                        (cons (make-os (spy-x (shg-spy sg))
-                                                       (spy-y (shg-spy sg)))
-                                              (shg-objects sg))
-                                        (shg-shots sg)
-                                        (shg-dtop sg))]
-               [(key=? "q" k) (make-shg (shg-lives sg)
-                                        (shg-score sg)
-                                        (make-spy (spy-x (shg-spy sg))  
-                                                  (spy-y (shg-spy sg))
-                                                  (spy-vel (shg-spy sg))
-                                                  (spy-osleft (shg-spy sg))
-                                                  (spy-ssleft (shg-spy sg)))
-                                        (cons (make-ss (spy-x (shg-spy sg))
-                                                       (+ (/ 53 (* 2 H))
-                                                          (spy-y (shg-spy sg))))
-                                              (shg-objects sg))
-                                        (shg-shots sg)
-                                        (shg-dtop sg))]
+               [(key=? "e" k) (add-os sg (shg-spy sg))]
+               [(key=? "q" k) (add-ss sg (shg-spy sg))]
                [(key=? " " k) (make-shg (shg-lives sg)
                                         (shg-score sg)
                                         (make-spy (spy-x (shg-spy sg))  
@@ -642,22 +714,58 @@
                                                   (spy-ssleft (shg-spy sg)))
                                         (shg-objects sg)
                                         (cons (make-shot (spy-x (shg-spy sg))
-                                                         (- (/ 53 (* 2 H))
-                                                            (spy-y
-                                                             (shg-spy sg))))
+                                                         (- (spy-y (shg-spy sg))
+                                                            (/ (image-height
+                                                                spy-car) 2)))
                                               (shg-shots sg))
                                         (shg-dtop sg))]
                [else sg])]))
 
-;; start-game: key SpyGame --> SpyGame
-;; if the SpyGame is a (make-splash ...) it starts the game with a
-;; (make-shg ...). if not, then nothing occurs
+;; accelerate: Nat --> Nat
+;; increases Nat by 10 unless it is >= (START-VEL + 20)
+(define (accelerate s)
+  (if (>= s (+ START-VEL 20))
+      s
+      (+ s 10)))
 
-(define (start-game k sg)
-  (if (splash? sg)
-      shg1
+;; decelerate: Nat --> Nat
+;; decreases Nat by 10 unless it is < (START-VEL - 20)
+(define (decelerate s)
+  (if (<= s (- START-VEL 20))
+      s
+      (- s 10)))
+
+;; add-os: shg spy --> shg
+;; adds an oilslick to the beginning of the shg's loo and subs 1 from osleft
+;; if the car has no oilslicks left add-os does nothing
+;; the oilsick as the same coordinates as the spy
+(define (add-os sg s)
+  (if (> (spy-osleft s) 0)
+      (make-shg (shg-lives sg)
+                (shg-score sg)
+                (make-spy (spy-x s) (spy-y s) (spy-vel s) (- (spy-osleft s) 1)
+                          (spy-ssleft s))
+                (cons (make-os (spy-x s) (spy-y s)) (shg-objects sg))
+                (shg-shots sg) (shg-dtop sg))
       sg))
 
+;; addss: shg spy --> shg
+;; adds a smokescreen to the beginning of the shg's loo and subs 1 from ssleft
+;; if the car has no smokescreens left add-ss does nothing
+(define (add-ss sg s)
+  (if (> (spy-ssleft s) 0)
+      (make-shg (shg-lives sg)
+                (shg-score sg)
+                (make-spy (spy-x s) (spy-y s) (spy-vel s) (spy-osleft s)
+                          (- (spy-ssleft s) 1))
+                (cons (make-ss (spy-x s) (+ (spy-y s)
+                                            (/ (image-height spy-car) 2))
+                               MAX-SSD) (shg-objects sg))
+                (shg-shots sg) (shg-dtop sg))
+      sg))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Tick handler!
 
 
 
