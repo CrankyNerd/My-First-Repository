@@ -302,6 +302,7 @@
 (define shg3 (make-shg 1 10 spy1 empty empty -1))
 (define shg4 (make-shg 0 293 spy1 empty empty 900))
 (define shg5 (make-shg 2 45 spy2 LOO1 LOS1 0))
+(define shg6 (make-shg 1 95 spy2 empty empty 803))
 
 (define-struct gameover [score])
 ;; where score is the score the player had when they died
@@ -333,10 +334,13 @@
 
 -- tick handler
    - AI
-   - place friendly cars offscreen
+   - place friendly cars offscreen ;;;DONE!
    - place enemy cars offscreen
    - place helpertrucks offscreen
-   - move everything
+   - move these things   ;;;; DONE!
+      - friendly cars
+      - ss
+      - BG
    - collisions
 
 |#
@@ -657,7 +661,7 @@
               shg1)
 (define (handle-key k sg)
   (cond [(splash? sg) shg1] ;; on any-key it makes the starting shg
-        [(gameover? sg) (make-splash splash-image)] ;; on any-key goes to splash
+        [(gameover? sg) (make-splash splash-image)] ;;on any-key goes to splash
         [(shg? sg)
          (cond [(key=? "w" k) (make-shg (shg-lives sg)
                                         (shg-score sg)
@@ -765,7 +769,280 @@
       sg))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Tick handler!
+; Tick Handler
+;                                     
+;                        ;            
+;  ;;;;;;;    ;          ;        ;   
+;     ;                  ;        ;   
+;     ;     ;;;    ;;;   ;  ;     ;   
+;     ;       ;   ;;  ;  ;  ;     ;   
+;     ;       ;   ;      ; ;      ;   
+;     ;       ;   ;      ;;;      ;   
+;     ;       ;   ;      ; ;          
+;     ;       ;   ;;     ;  ;         
+;     ;     ;;;;;  ;;;;  ;   ;    ;;  
+;                                     
+;                                     
+;                                     
+
+;; handle-tick: SpyGame --> Spygame
+(define (handle-tick sg)
+  (cond [(splash? sg) sg]
+        [(gameover? sg) sg]
+        [(shg? sg)
+         ...]))
+
+;; enemy-hit?: shg --> Boolean
+;; determines if a sml-enemy was struck by a bullet
+(define (hit? sg)
+  ...)
+
+;; move-spy: shg --> shg
+;; moves the spy up according to its velocity
+(check-expect (move-spy shg1)
+              shg1) ;; spy velocity is 0 so nothing changes
+(check-expect (move-spy shg2)
+              (make-shg 2 45 (make-spy 200 389 11 2 3) LOO1 LOS1 -20))
+(check-expect (move-spy shg6)
+              (make-shg 1 95 (make-spy 200 389 11 2 3) empty empty 803))
+(define (move-spy sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (make-spy (spy-x (shg-spy sg))
+                      (- (spy-y (shg-spy sg)) (spy-vel (shg-spy sg)))
+                      (spy-vel (shg-spy sg))
+                      (spy-osleft (shg-spy sg))
+                      (spy-ssleft (shg-spy sg)))
+            (shg-objects sg)
+            (shg-shots sg)
+            (shg-dtop sg)))
+
+;; move-window: shg --> shg
+;; moves the screen's window up according to the spy's velocity
+(check-expect (move-window shg1)
+              (make-shg 3 0 spy1 empty empty -10)) ;; spy velocity is 0
+(check-expect (move-window shg2)
+              (make-shg 2 45 spy2 LOO1 LOS1 -31))
+(check-expect (move-window shg6)
+              (make-shg 1 95 spy2 empty empty 792))
+(define (move-window sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (shg-spy sg)
+            (shg-objects sg)
+            (shg-shots sg)
+            (- (shg-dtop sg) (spy-vel (shg-spy sg)))))
+
+;; move-frnd: FriendlyCar --> FriendlyCar
+;; moves a single FrienclyCar according to its velocity
+(define (move-frnd f) ;; a helper used in move-frndinobjects
+  (cond [(FriendlyCar? f)
+         (make-FriendlyCar (FriendlyCar-x f)
+                           (- (FriendlyCar-y f) (FriendlyCar-vel f))
+                           (FriendlyCar-vel f))]
+        [else f]))
+
+;; move-frndinobjects: LOO --> LOO
+;; makes the same LOO, but with all friendly cars moved
+;; helper used in move-passives
+(check-expect (move-frndinobjects empty) empty)
+(check-expect (move-frndinobjects (cons (make-FriendlyCar 150 200 3) empty))
+              (cons (make-FriendlyCar 150 197 3) empty))
+(check-expect (move-frndinobjects (list (make-os 134 592)
+                                        (make-os 140 32)
+                                        (make-small-enemy 13 5 23)
+                                        (make-hlpr-truck 22 44 'os 4)))
+              (list (make-os 134 592)
+                    (make-os 140 32)
+                    (make-small-enemy 13 5 23)
+                    (make-hlpr-truck 22 44 'os 4)))
+(check-expect (move-frndinobjects LOO1)
+              (list (make-os 300 400)
+                    (make-ss 200 500 1)
+                    (make-small-enemy 300 790 2)
+                    (make-large-enemy 300 200 2)
+                    (make-hlpr-truck 200 150 'os 3)
+                    (make-FriendlyCar 400 145 5)))
+(check-expect (move-frndinobjects (cons (make-FriendlyCar 145 6 2) LOO1))
+              (list (make-FriendlyCar 145 4 2)
+                    (make-os 300 400)
+                    (make-ss 200 500 1)
+                    (make-small-enemy 300 790 2)
+                    (make-large-enemy 300 200 2)
+                    (make-hlpr-truck 200 150 'os 3)
+                    (make-FriendlyCar 400 145 5)))
+(check-expect (move-frndinobjects (list (make-FriendlyCar 145 6 2)
+                                        (make-FriendlyCar 15 86 35)
+                                        (make-FriendlyCar 45 656 4)))
+              (list (make-FriendlyCar 145 4 2)
+                    (make-FriendlyCar 15 51 35)
+                    (make-FriendlyCar 45 652 4)))
+(check-expect (move-frndinobjects (list (make-FriendlyCar 145 6 2)
+                                        (make-hlpr-truck 200 150 'os 3)
+                                        (make-large-enemy 300 200 2)
+                                        (make-FriendlyCar 15 86 35)
+                                        (make-FriendlyCar 45 656 4)))
+              (list (make-FriendlyCar 145 4 2)
+                    (make-hlpr-truck 200 150 'os 3)
+                    (make-large-enemy 300 200 2)
+                    (make-FriendlyCar 15 51 35)
+                    (make-FriendlyCar 45 652 4)))
+(define (move-frndinobjects ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls)
+         (cons (move-frnd (first ls)) (move-frndinobjects (rest ls)))]))
+
+;; move-passives: shg --> shg
+;; moves all of the friendly cars in shg's LOP
+(check-expect (move-passives shg1)
+              shg1)
+(check-expect (move-passives shg2)
+              (make-shg 2 45 spy2
+                        (list (make-os 300 400)
+                              (make-ss 200 500 1)
+                              (make-small-enemy 300 790 2)
+                              (make-large-enemy 300 200 2)
+                              (make-hlpr-truck 200 150 'os 3)
+                              (make-FriendlyCar 400 145 5))
+                        LOS1
+                        -20))
+(check-expect (move-passives (make-shg 1 20 spy1
+                                       (list (make-os 134 592)
+                                             (make-os 140 32)
+                                             (make-small-enemy 13 5 23)
+                                             (make-hlpr-truck 22 44 'os 4))
+                                       empty
+                                       2))
+              (make-shg 1 20 spy1 (list (make-os 134 592)
+                                        (make-os 140 32)
+                                        (make-small-enemy 13 5 23)
+                                        (make-hlpr-truck 22 44 'os 4))
+                        empty
+                        2))
+(check-expect (move-passives (make-shg 3 544 spy2
+                                       (list (make-FriendlyCar 145 6 2)
+                                             (make-FriendlyCar 15 86 35)
+                                             (make-FriendlyCar 45 656 4))
+                                       LOS1
+                                       45))
+              (make-shg 3 544 spy2
+                        (list (make-FriendlyCar 145 4 2)
+                              (make-FriendlyCar 15 51 35)
+                              (make-FriendlyCar 45 652 4))
+                        LOS1
+                        45))
+(define (move-passives sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (shg-spy sg)
+            (move-frndinobjects (shg-objects sg))
+            (shg-shots sg)
+            (shg-dtop sg)))
+
+;; move-singless spy object --> ss
+;; moves a ss to the back of the spy
+(define (move-singless sp o)
+  (if (ss? o)(make-ss (spy-x sp)
+                      (+ (spy-y sp)
+                         (* 1/2 (image-height spy-car))
+                         (* 1/2 (image-height ss-image)))
+                      (ss-duration o))
+      o))
+;; move-ssinobjects: spy LOO --> LOO
+;; produces the same list, but with the smokescreens moved
+(define (move-ssinobjects s ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls) (cons (move-singless s (first ls))
+                          (move-ssinobjects s (rest ls)))]))
+;; move-ss: shg --> shg
+;; keeps the smokescreens in objects at the back of spy while spy moves
+(check-expect (move-ss shg1)
+              shg1)
+(check-expect (move-ss shg2)
+              (make-shg 2 45 spy2 (list (make-os 300 400)
+                                        (make-ss 200 (+ 400
+                                                        (* 1/2
+                                                           (image-height
+                                                            spy-car))
+                                                        (* 1/2
+                                                           (image-height
+                                                            ss-image)))
+                                                 1)
+                                        (make-small-enemy 300 790 2)
+                                        (make-large-enemy 300 200 2)
+                                        (make-hlpr-truck 200 150 'os 3)
+                                        (make-FriendlyCar 400 150 5))
+                        LOS1 -20))
+(define (move-ss sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (shg-spy sg)
+            (move-ssinobjects (shg-spy sg) (shg-objects sg))
+            (shg-shots sg)
+            (shg-dtop sg)))
+
+;; count-frnds: LOO --> Num
+;; counts the number of friends in the list of objects
+(define (count-frnds ls)
+  (length (filter FriendlyCar? ls)))
+
+;; random-car: shg --> FriendlyCar
+;; makes a random car. if the random = 0, then the random car will be
+;; ahead of the spy. otherwise it will be behind the spy
+(define (random-car sg)
+  (if (= 0 (random 2))
+      (make-FriendlyCar (+ (random 390) 110)
+                        (+ (spy-y (shg-spy sg)) (* 1/2 H) 53)
+                        (- (spy-vel (shg-spy sg)) 3))   ;;subject to change
+      (make-FriendlyCar (+ (random 390) 110)
+                        (- (spy-y (shg-spy sg)) (* 1/2 H) 53)
+                        (+ (spy-vel (shg-spy sg)) 5)))) ;;subject to change
+;; generate-frnd: shg --> shg
+;; places friendly cars off the screen based on random generation.
+;; the cars can be in front or behind of spy. If the cars are in front,
+;; they will have a slower velocity than spy. If they are behind, they will
+;; be faster than spy.
+;; The probability of generation decreases the more frnds are in shg-objects
+(define (generate-frnd sg)
+  (if (<= (random (+ 10 (count-frnds sg))) 4)
+      (make-shg (shg-lives sg)
+                (shg-score sg)
+                (shg-spy sg)
+                (cons (random-car sg)
+                      (shg-objects sg))
+                (shg-shots sg)
+                (shg-dtop sg))
+      sg))
+
+;; random-truck: shg --> hlpr-truck
+;; makes a random hlpr-truck
+(define (random-truck sg)
+  (make-hlpr-truck (+ (random 390) 110)
+              (- (spy-y (shg-spy sg)) (* 1/2 H) 109)
+              (if (= 0 (random 2)) 'os 'ss)
+              (+ (spy-vel (shg-spy sg)) 10))) ;; subject to change
+
+;; alreadytruck?: LOO --> Boolean
+;; determines if there is a truck in LOO
+(define (alreadytruck? ls)
+  (ormap hlpr-truck? ls))
+
+;; generate-truck: shg --> shg
+;; generates a truck if there is not already a truck in objects
+(define (generate-truck sg)
+  (cond [(alreadytruck? sg) sg]
+        [(< (random 10) 2) (make-shg (shg-lives sg)
+                                     (shg-score sg)
+                                     (shg-spy sg)
+                                     (cons (random-truck sg)
+                                           (shg-objects sg))
+                                     (shg-shots sg)
+                                     (shg-dtop sg))]
+        [else sg]))
+
+
+
+
 
 
 
