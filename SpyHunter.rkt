@@ -57,6 +57,7 @@
 
 (define MAX-SSD 5)
 (define START-VEL 30)
+(define SHOT-VEL 50)
 
 ;; BG
 (define BG (beside (rectangle (* 1/6 W) (* 3 H) 'solid 'green)
@@ -284,7 +285,7 @@
 ;; A SpyGame is a
 ;; (make-splash Image) or
 ;; (make-shg Nat Nat Nat Nat spy List-of[Object Lis-of[Shot] Num]) or
-;; (make-gameover Image Nat)
+;; (make-gameover Nat)
 
 (define-struct splash [bg])
 ;; where bg is an image set as the splashscreen
@@ -335,13 +336,25 @@
 -- tick handler
    - AI
    - place friendly cars offscreen ;;;DONE!
-   - place enemy cars offscreen
-   - place helpertrucks offscreen
+   - place enemy cars offscreen    ;;;DONE!
+   - place helpertrucks offscreen  ;;;DONE!
    - move these things   ;;;; DONE!
       - friendly cars
       - ss
       - BG
    - collisions
+      - LTRBs
+          - generate-ltrb
+          - inside?
+          - overlapping?
+      - is an enemy hit by shot?
+      - is an enemy or a spy off the road?
+      - is the spy inside a truck?
+      - is an enemy or spy touching?
+      - is an enemy touching an os
+      - is an enemy touching a ss
+
+-- endgame?       ;;;DONE!
 
 |#
 
@@ -980,9 +993,70 @@
             (move-ssinobjects (shg-spy sg) (shg-objects sg))
             (shg-shots sg)
             (shg-dtop sg)))
+;; move-shot: shot --> shot
+;; moves a single shot according to its velocity
+(define (move-shot s)
+  (make-shot (shot-x s) (- (shot-y s) SHOT-VEL)))
+
+;; move-shots: LOS --> LOS
+;; moves all shot is a list of shot
+(check-expect (move-shots LOS1)
+              (list (make-shot 150 330)
+                    (make-shot 150 310)
+                    (make-shot 150 290)))
+(define (move-shots ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls)
+         (cons (move-shot (first ls)) (move-shots (rest ls)))]))
+
+;; remove-shot?: spy shot --> Boolean
+;; produces true if the shot is 200 or more pixels ahead of spy, otherwise false
+(define (remove-shot? sp sh)
+  (<= (shot-y sh) (- (spy-y sp) 200)))
+
+;; remove-shots: s LOS --> LOS
+;; removes shot from LOS according tp remove-shot?
+(check-expect (remove-shots (make-spy 150 335 2 2 2) LOS1)
+              LOS1)
+(check-expect (remove-shots (make-spy 150 541 3 5 2) LOS1)
+              (list (make-shot 150 380) (make-shot 150 360)))
+(define (remove-shots s ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls) (if (remove-shot? s (first ls))
+                        (remove-shots s (rest ls))
+                        (cons (first ls) (remove-shots s (rest ls))))]))
+
+;; handle-shot: shg --> shg
+;; moves shots and removes them from the list of shot
+(check-expect (handle-shot shg1)
+              shg1)
+(check-expect (handle-shot (make-shg 2 533 (make-spy 150 491 1 2 3)
+                                     empty LOS1 3))
+              (make-shg 2 533 (make-spy 150 491 1 2 3) empty 
+                        (list (make-shot 150 330)
+                              (make-shot 150 310))
+                        3))
+(define (handle-shot sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (shg-spy sg)
+            (shg-objects sg)
+            (remove-shots (shg-spy sg) (move-shots (shg-shots sg)))
+            (shg-dtop sg)))
 
 ;; count-frnds: LOO --> Num
 ;; counts the number of friends in the list of objects
+(check-expect (count-frnds empty)
+              0)
+(check-expect (count-frnds (list (make-small-enemy 4 5 2)
+                                 (make-small-enemy 5 25 6)
+                                 (make-large-enemy 2 6 1)))
+              0)
+(check-expect (count-frnds LOO1)
+              1)
+(check-expect (count-frnds (cons (make-FriendlyCar 2 5 3) LOO1))
+              2)
+
 (define (count-frnds ls)
   (length (filter FriendlyCar? ls)))
 
@@ -1018,9 +1092,9 @@
 ;; makes a random hlpr-truck
 (define (random-truck sg)
   (make-hlpr-truck (+ (random 390) 110)
-              (- (spy-y (shg-spy sg)) (* 1/2 H) 109)
-              (if (= 0 (random 2)) 'os 'ss)
-              (+ (spy-vel (shg-spy sg)) 10))) ;; subject to change
+                   (- (spy-y (shg-spy sg)) (* 1/2 H) 109)
+                   (if (= 0 (random 2)) 'os 'ss)
+                   (+ (spy-vel (shg-spy sg)) 10))) ;; subject to change
 
 ;; alreadytruck?: LOO --> Boolean
 ;; determines if there is a truck in LOO
@@ -1029,7 +1103,7 @@
 
 ;; generate-truck: shg --> shg
 ;; generates a truck if there is not already a truck in objects
-(define (generate-truck sg)
+(define (generate-truck sg) ;;; MIGHT BE BETTER TO JUST KEEP TRACK OF TICKS
   (cond [(alreadytruck? sg) sg]
         [(< (random 10) 2) (make-shg (shg-lives sg)
                                      (shg-score sg)
@@ -1040,8 +1114,106 @@
                                      (shg-dtop sg))]
         [else sg]))
 
+;; generate-small-enemy: shg --> shg
+;; places a small-enemy offscreen either infront of or behind the spy.
+;; they will always start with x=(* 1/6 W) and velocity 10, but the AI
+;; functions will change those values appropriately
+(define (generate-small-enemy sg)
+  (if (<= (random 5) 2) ;;; change for more or fewer enemies
+      (make-shg (shg-lives sg)
+                (shg-score sg)
+                (shg-spy sg)
+                (cons (make-small-enemy (* 1/6 W)
+                                        (- (spy-y (shg-spy sg)) (* 1/2 H) 109)
+                                        10) (shg-objects sg))
+                (shg-shots sg)
+                (shg-dtop sg))
+      sg))
+
+;; generate-large-enemy: shg --> shg
+;; places a small-enemy offscreen either infront of or behind the spy.
+;; they will always start with x=(* 1/6 W) and velocity 10, but the AI
+;; functions will change those values appropriately
+(define (generate-large-enemy sg)
+  (if (<= (random 5) 1) ;;; change for more or fewer enemies
+      (make-shg (shg-lives sg)
+                (shg-score sg)
+                (shg-spy sg)
+                (cons (make-small-enemy (* 1/6 W)
+                                        (- (spy-y (shg-spy sg)) (* 1/2 H) 109)
+                                        10) (shg-objects sg))
+                (shg-shots sg)
+                (shg-dtop sg))
+      sg))
+
+;; generate-enemies: shg --> shg
+;; generates large and small enemies from generate-small-enemy and
+;; generate-large-enemy
+(define (generate-enemies sg)
+  (generate-small-enemy (generate-large-enemy sg)))
 
 
+
+;; remove?: spy object --> Boolean
+;; determines if an object should be removed from the game
+;; objects should be removed in these situations
+;  - cars: have gone offscreen by 200 pixels in either direction
+;  - oilslick: has gone fully offscreen (* 1/2 (image-height os-image))
+;  - smokescreen: runs out of time
+(define (remove? s o)
+  (cond [(FriendlyCar? o) (or (<= (FriendlyCar-y o) (- (spy-y s) (* 1/2 H) 200))
+                              (>= (FriendlyCar-y o) (+ (spy-y s) (* 1/2 H) 200))
+                              )]
+        [(small-enemy? o) (or (<= (small-enemy-y o) (- (spy-y s) (* 1/2 H) 200))
+                              (>= (small-enemy-y o) (+ (spy-y s) (* 1/2 H) 200))
+                              )]
+        [(large-enemy? o) (or (<= (large-enemy-y o) (- (spy-y s) (* 1/2 H) 200))
+                              (>= (large-enemy-y o) (+ (spy-y s) (* 1/2 H) 200))
+                              )]
+        [(hlpr-truck? o) (or (<= (hlpr-truck-y o) (- (spy-y s) (* 1/2 H) 200))
+                             (>= (hlpr-truck-y o) (+ (spy-y s) (* 1/2 H) 200))
+                             )]
+        [(os? o) (>= (os-y o) (+ (spy-y s) (* 1/2 H) (* 1/2 (image-height
+                                                             os-image))))]
+        [(ss? o) (= 0 (ss-duration o))]))
+
+;; remove-objects: spy LOO --> LOO
+;; removes all offscreen objects in LOO that are not getting approaching spy
+;; (from front or back)
+(define (remove-objects s ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls) (if (remove? s (first ls))
+                        (remove-objects s (rest ls))
+                        (cons (first ls) (remove-objects s (rest ls))))]))
+
+;; remove-offscreen: shg --> shg
+;; removes objects from shg according to preivous parameters
+(check-expect (remove-offscreen shg1)
+              shg1)
+(check-expect (remove-offscreen shg2)
+              shg2)
+(check-expect (remove-offscreen (make-shg 2 3 spy2
+                                          (cons (make-FriendlyCar 300 1000 3)
+                                                LOO1)
+                                          empty
+                                          4))
+              (make-shg 2 3 spy2 LOO1 empty 4))
+(check-expect (remove-offscreen (make-shg 1 44 (make-spy 344 700 1 2 2)
+                                          (list (make-hlpr-truck 212 1354 'os 4)
+                                                (make-FriendlyCar 245 1299 4)
+                                                (make-small-enemy 5 100 2)
+                                                (make-os 4 1300))
+                                          empty 3))
+              (make-shg 1 44 (make-spy 344 700 1 2 2)
+                        (list (make-FriendlyCar 245 1299 4)) empty 3))
+
+(define (remove-offscreen sg)
+  (make-shg (shg-lives sg)
+            (shg-score sg)
+            (shg-spy sg)
+            (remove-objects (shg-spy sg) (shg-objects sg))
+            (shg-shots sg)
+            (shg-dtop sg)))
 
 
 
