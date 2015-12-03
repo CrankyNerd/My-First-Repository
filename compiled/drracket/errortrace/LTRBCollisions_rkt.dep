@@ -1,0 +1,1 @@
+("6.1.1" ("a9d576338500d3849a4373a54f54d7a0f5485172" . "09aed30e1b55507c597d933b46f6d5f48671692e") (collects #"test-engine" #"racket-tests.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"lang" #"posn.rkt") (collects #"2htdp" #"image.rkt"))
