@@ -4,7 +4,6 @@
 (require 2htdp/image)
 (require test-engine/racket-tests)
 (require 2htdp/universe)
-#;(require "LTRBCollisions.rkt")
 #|
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Constant data
 
@@ -46,7 +45,6 @@
 -- enemy velocity
 -- velocity of the background (because of the player's car)
 -- velocity of helper truck
-
 |#
 
 ;;; Constant data defined
@@ -57,12 +55,13 @@
 (define MAX-SSD 15)
 (define START-VEL 5)
 (define MAX-SPYVEL 50)
-(define MIN-SPYVEL 0)
+(define MIN-SPYVEL 10)
 (define MAX-VEL 45)
 (define MIN-VEL -15)
 (define SHOT-VEL 50)
-(define MAX-XVEL 10)
-(define MIN-XVEL -10)
+(define MAX-XVEL 2) ;10
+(define MIN-XVEL -10) ;-10
+(define MAX-ENEMYVEL 10) ;20
 
 ;; BG
 (define BG (beside (rectangle (* 1/6 W) (* 3 H) 'solid 'green)
@@ -301,6 +300,16 @@
 ;; (cons small-enemy LOE) or
 ;; (cons large-enemy LOE)
 
+;; a car is either a
+;; FriendlyCar
+;; small-enemy
+;; spy or
+;; large-enemy
+
+;; a Listof[car] LOC is either
+;; empty or
+;; (cons car LOC)
+
 ;; a gadget is either a
 ;; ss or an os
 
@@ -533,14 +542,12 @@
           - generate-ltrb
           - inside?
           - overlapping?
-      - is an enemy hit by shot?
-      - is an enemy or a spy off the road?
-      - is the spy inside a truck?
-      - is an enemy or spy touching?
-      - is an enemy touching an os
-      - is an enemy touching a ss
-
--- endgame?       ;;;DONE!
+      - is an enemy hit by shot?   ;;;DONE!
+      - is an enemy or a spy off the road? ;;;DONE!
+      - is the spy inside a truck?         ;;;DONE!
+      - is an enemy or spy touching?       ;;;DONE!
+      - is an enemy touching an os         ;;;DONE!
+      - is an enemy touching a ss          ;;;DONE!
 
 |#
 
@@ -819,7 +826,7 @@
 (check-expect (handle-key shg1 "w")
               (make-shg 3 0 (make-spy 300 400 10 0 0) empty empty -10))
 (check-expect (handle-key shg2 "s")
-              (make-shg 2 45 (make-spy 200 400 1 2 3) LOO1 LOS1 -20))
+              (make-shg 2 45 (make-spy 200 400 10 2 3) LOO1 LOS1 -20))
 (check-expect (handle-key shg1 "a")
               (make-shg 3 0 (make-spy 290 400 0 0 0) empty empty -10))
 (check-expect (handle-key shg2 "d")
@@ -828,7 +835,7 @@
               (make-shg 3 0 (make-spy 300 400 0 0 0) empty empty -10))
 (check-expect (handle-key shg2 "e")
               (make-shg 2 45 (make-spy 200 400 11 1 3)
-                        (cons (make-os 200 400) LOO1) LOS1 -20))
+                        (cons (make-os 200 453) LOO1) LOS1 -20))
 (check-expect (handle-key shg1 "q")
               (make-shg 3 0 (make-spy 300 400 0 0 0) empty empty -10))
 (check-expect (handle-key shg2 "q")
@@ -972,7 +979,10 @@
                 (shg-score sg)
                 (make-spy (spy-x s) (spy-y s) (spy-vel s) (- (spy-osleft s) 1)
                           (spy-ssleft s))
-                (cons (make-os (spy-x s) (spy-y s)) (shg-objects sg))
+                (cons (make-os (spy-x s)
+                               (+ (spy-y s) (+ (/ (image-height spy-car) 2)
+                                               (/ (image-height os-image) 2))))
+                      (shg-objects sg))
                 (shg-shots sg) (shg-dtop sg))
       sg))
 
@@ -1014,23 +1024,24 @@
         [(gameover? sg) sg]
         [(shg? sg)
          (endgame
-          (handle-score
-           (handle-spy
-            (handle-enemies
-             (move-window
-              (move-friends
-               (handle-crash
-                (handle-shot
-                 (generate-frnd
-                  (generate-truck
-                   (generate-enemies
-                    (remove-enemies
-                     (remove-offscreen
-                      (die
-                       (handle-ss
-                        (move-os
-                         (handle-hlpr sg)))))
-                     ))))))))))))]))
+          (handle-collisions
+           (handle-score
+            (handle-spy
+             (handle-enemies
+              (move-window
+               (move-friends
+                (handle-crash
+                 (handle-shot
+                  (generate-frnd
+                   (generate-truck
+                    (generate-enemies
+                     (remove-enemies
+                      (remove-offscreen
+                       (die
+                        (handle-ss
+                         (move-os
+                          (handle-hlpr sg)))))
+                      )))))))))))))]))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; endgame?: shg --> Boolean
@@ -1347,7 +1358,7 @@
                                  (make-hlpr-truck 200 150 'os 3 -2 'f)
                                  (make-FriendlyCar 400 150 5)))
               (list
-               (make-crash sml-enemy 425 130 11 -1)
+               (make-crash sml-enemy 425 130 11 0)
                (make-large-enemy 300 200 2 0)
                (make-hlpr-truck 200 150 'os 3 -2 'f)
                (make-crash frnd 400 150 11 0))
@@ -1360,19 +1371,19 @@
                                 (make-crash sml-enemy
                                             (small-enemy-x (first ls))
                                             (small-enemy-y (first ls))
-                                            (spy-vel s)
+                                            (clamp 5 (spy-vel s) MAX-VEL)
                                             (- (random 11) 5))]
                                [(large-enemy? (first ls))
                                 (make-crash lrg-enemy
                                             (large-enemy-x (first ls))
                                             (large-enemy-y (first ls))
-                                            (spy-vel s)
+                                            (clamp 5 (spy-vel s) MAX-VEL)
                                             (- (random 11) 5))]
                                [(FriendlyCar? (first ls))
                                 (make-crash frnd
                                             (FriendlyCar-x (first ls))
                                             (FriendlyCar-y (first ls))
-                                            (spy-vel s)
+                                            (clamp 5 (spy-vel s) MAX-VEL)
                                             (- (random 11) 5))])
                          (apply-crash s g (rest ls)))
                         (cons (first ls)
@@ -1591,12 +1602,12 @@
                         (large-enemy-vel e) (large-enemy-xvel e))))
 ;; move-window: shg --> shg
 ;; moves the screen's window up according to the spy's velocity
-#;#;#;(check-expect (move-window shg1)
-                    (make-shg 3 0 spy1 empty empty -10)) ;; spy velocity is 0
+(check-expect (move-window shg1)
+              (make-shg 3 0 spy1 empty empty -10)) ;; spy velocity is 0
 (check-expect (move-window shg2)
-              (make-shg 2 45 spy2 LOO1 LOS1 -31))
+              (make-shg 2 45 spy2 LOO1 LOS1 -9))
 (check-expect (move-window shg6)
-              (make-shg 1 95 spy2 empty empty 792))
+              (make-shg 1 95 spy2 empty empty 814))
 (define (move-window sg)
   (make-shg (shg-lives sg)
             (shg-score sg)
@@ -1724,6 +1735,7 @@
         [(cons? ls) (cons (move-singleos s (first ls))
                           (move-osinobjects s (rest ls)))]))
 ;; move-os: shg --> shg
+;; moves all the os in an shg
 (define (move-os sg)
   (make-shg (shg-lives sg)
             (shg-score sg)
@@ -1773,6 +1785,7 @@
             (shg-shots sg)
             (shg-dtop sg)))
 ;; sub-duration: LOO --> LOO
+;; decreases the duration of the ss
 (define (sub-duration ls)
   (cond [(empty? ls) empty]
         [(cons? ls) (if (ss? (first ls))
@@ -1781,6 +1794,7 @@
                               (sub-duration (rest ls)))
                         (cons (first ls) (sub-duration (rest ls))))]))
 ;; handle-ss: shg --> shg
+;; moves and subtracts the duration of an ss in an shg
 (define (handle-ss sg)
   (move-ss (make-shg (shg-lives sg)
                      (shg-score sg)
@@ -1839,22 +1853,21 @@
             (remove-shots (shg-spy sg) (move-shots (shg-shots sg)))
             (shg-dtop sg)))
 
-;; count-frnds: LOO --> Num
-;; counts the number of friends in the list of objects
-(check-expect (count-frnds empty)
+;; count-x: f LOO --> Num
+;; counts the number of x that is in a given LOO
+;; f is a Boolean function that identifies structs
+(check-expect (count-x FriendlyCar? empty)
               0)
-(check-expect (count-frnds (list (make-small-enemy 4 5 2 0)
-                                 (make-small-enemy 5 25 6 0)
-                                 (make-large-enemy 2 6 1 0)))
+(check-expect (count-x FriendlyCar? (list (make-small-enemy 4 5 2 0)
+                                          (make-small-enemy 5 25 6 0)
+                                          (make-large-enemy 2 6 1 0)))
               0)
-(check-expect (count-frnds LOO1)
+(check-expect (count-x small-enemy? LOO1)
               1)
-(check-expect (count-frnds (cons (make-FriendlyCar 2 5 3) LOO1))
+(check-expect (count-x small-enemy? (cons (make-small-enemy 2 5 3 2) LOO1))
               2)
-
-(define (count-frnds ls)
-  (length (filter FriendlyCar? ls)))
-
+(define (count-x f ls)
+  (length (filter f ls)))
 ;; random-car: shg --> FriendlyCar
 ;; makes a random car. if the random = 0, then the random car will be
 ;; ahead of the spy. otherwise it will be behind the spy
@@ -1873,7 +1886,7 @@
 ;; be faster than spy.
 ;; The probability of generation decreases the more frnds are in shg-objects
 (define (generate-frnd sg)
-  (if (<= (random (+ 200 (count-frnds (shg-objects sg)))) 4)
+  (if (<= (random (+ 200 (count-x FriendlyCar? (shg-objects sg)))) 4)
       (make-shg (shg-lives sg)
                 (shg-score sg)
                 (shg-spy sg)
@@ -1902,13 +1915,13 @@
 ;; generates a truck if there is not already a truck in objects
 (define (generate-truck sg) ;;; MIGHT BE BETTER TO JUST KEEP TRACK OF TICKS
   (cond [(alreadytruck? (shg-objects sg)) sg]
-        [(< (random 10) 2) (make-shg (shg-lives sg) ;;random 1000
-                                     (shg-score sg)
-                                     (shg-spy sg)
-                                     (cons (random-truck sg)
-                                           (shg-objects sg))
-                                     (shg-shots sg)
-                                     (shg-dtop sg))]
+        [(< (random 1000) 2) (make-shg (shg-lives sg) ;;random 1000
+                                           (shg-score sg)
+                                           (shg-spy sg)
+                                           (cons (random-truck sg)
+                                                 (shg-objects sg))
+                                           (shg-shots sg)
+                                           (shg-dtop sg))]
         [else sg]))
 
 ;; generate-small-enemy: shg --> shg
@@ -1916,7 +1929,10 @@
 ;; they will always start with x=(* 1/6 W) and velocity 10, but the AI
 ;; functions will change those values appropriately
 (define (generate-small-enemy sg)
-  (if (<= (random 30) 2) ;;; change for more or fewer enemies
+  (local ((define numcars (count-x small-enemy? (shg-objects sg))))
+  (if (and (<= (+ (random 130)
+                  (* 25 numcars)) 2) ;;; change for more or fewer enemies
+           (< numcars 3)) ;; 3 enemies max
       (make-shg (shg-lives sg)
                 (shg-score sg)
                 (shg-spy sg)
@@ -1925,14 +1941,23 @@
                                         10 0) (shg-objects sg))
                 (shg-shots sg)
                 (shg-dtop sg))
-      sg))
+      sg)))
+;; aready-sml?: LOO --> Boolean
+;; function used for testing purposes
+;; determines if there is a small-enemy in the ls
+(define (already-sml? ls)
+  (cond [(empty? ls) false]
+        [(cons? ls) (or (small-enemy? (first ls))
+                        (already-sml? (rest ls)))]))
 
 ;; generate-large-enemy: shg --> shg
 ;; places a small-enemy offscreen either infront of or behind the spy.
 ;; they will always start with x=(* 1/6 W) and velocity 10, but the AI
 ;; functions will change those values appropriately
 (define (generate-large-enemy sg)
-  (if (<= (random 30) 1) ;;; change for more or fewer enemies
+  (local ((define numcars (count-x large-enemy? (shg-objects sg))))
+  (if (and (<= (+ (random 500) numcars) 1) ;;; change for more or fewer enemies
+           (< (count-x large-enemy? (shg-objects sg)) 2)) ;; 2 enemies max
       (make-shg (shg-lives sg)
                 (shg-score sg)
                 (shg-spy sg)
@@ -1941,7 +1966,7 @@
                                         10 0) (shg-objects sg))
                 (shg-shots sg)
                 (shg-dtop sg))
-      sg))
+      sg)))
 
 ;; generate-enemies: shg --> shg
 ;; generates large and small enemies from generate-small-enemy and
@@ -2058,7 +2083,7 @@
   (cond [(empty? ls) empty]
         [(cons? ls) (if (hlpr-truck? (first ls))
                         (cons (change-truck-vel-pos s (first ls))
-                              (move-hlpr-inLOO s (rest ls)))
+                              (rest ls))
                         (cons (first ls) (move-hlpr-inLOO s (rest ls))))]))
 ;; handle-hlpr: shg --> shg
 (define (handle-hlpr sg)
@@ -2073,7 +2098,7 @@
 ;; takes either a small or large enemy
 ;; it adjusts the enemie's vertical velocity so they can level with the spy
 (check-expect (adjust-vel spy1 (make-small-enemy 300 790 23 0))
-              (make-small-enemy 300 790 45 0))
+              (make-small-enemy 300 790 10 0))
 (check-expect (adjust-vel spy2 (make-small-enemy 300 200 6 10))
               (make-small-enemy 300 200 -15 10))
 (check-expect (adjust-vel spy2 (make-large-enemy 300 396 10 4))
@@ -2085,14 +2110,14 @@
                         (clamp MIN-VEL
                                (- (small-enemy-vel e)
                                   (- (spy-y s) (small-enemy-y e)))
-                               MAX-VEL)
+                               MAX-ENEMYVEL)
                         (small-enemy-xvel e))
       (make-large-enemy (large-enemy-x e)
                         (large-enemy-y e)
                         (clamp MIN-VEL
                                (- (large-enemy-vel e)
                                   (- (spy-y s) (large-enemy-y e)))
-                               MAX-VEL)
+                               MAX-ENEMYVEL)
                         (large-enemy-xvel e))))
 ;;helper
 (define (clamp mn x mx)
@@ -2105,7 +2130,7 @@
 (check-expect (adjust-xvel spy2 (make-small-enemy 200 200 6 10))
               (make-small-enemy 200 200 6 0))
 (check-expect (adjust-xvel spy2 (make-large-enemy 100 396 10 4))
-              (make-large-enemy 100 396 10 10))
+              (make-large-enemy 100 396 10 2))
 (define (adjust-xvel s e)
   (if (small-enemy? e)
       (make-small-enemy (small-enemy-x e)
@@ -2137,9 +2162,9 @@
 (check-expect (move-enemiesinLOO spy1 (list (make-small-enemy 100 30 4 -1)
                                             (make-small-enemy 504 636 11 0)
                                             (make-large-enemy 708 432 1 10)))
-              (list (make-small-enemy 99 26 -15 10)
-                    (make-small-enemy 504 625 45 -10)
-                    (make-large-enemy 718 431 32 -10)))
+              (list (make-small-enemy 99 26 -15 2)
+                    (make-small-enemy 504 625 10 -10)
+                    (make-large-enemy 718 431 10 -10)))
 (define (move-enemiesinLOO s ls)
   (cond [(empty? ls) empty]
         [(cons? ls)
@@ -2157,6 +2182,376 @@
             (shg-shots sg)
             (shg-dtop sg)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Collisions between cars
+
+;;bounce-left: car --> car
+;; moves the car 10 pixels to the left
+(check-expect (bounce-left spy1) (make-spy 290 400 0 0 0))
+(check-expect (bounce-left (make-small-enemy 120 899 20 10))
+              (make-small-enemy 110 899 20 10))
+(check-expect (bounce-left (make-large-enemy 328 391 -15 0))
+              (make-large-enemy 318 391 -15 0))
+(check-expect (bounce-left (make-FriendlyCar 110 367 -15))
+              (make-FriendlyCar 100 367 -15))
+(check-expect (bounce-left (make-hlpr-truck 330 355 'ss 7 0 'f))
+              (make-hlpr-truck 320 355 'ss 7 0 'f))
+(define (bounce-left c)
+  (cond [(spy? c) (make-spy (- (spy-x c) 10) (spy-y c) (spy-vel c)
+                            (spy-osleft c)
+                            (spy-ssleft c))]
+        [(small-enemy? c) (make-small-enemy (- (small-enemy-x c) 10)
+                                            (small-enemy-y c)
+                                            (small-enemy-vel c)
+                                            (small-enemy-xvel c))]
+        [(large-enemy? c) (make-large-enemy (- (large-enemy-x c) 10)
+                                            (large-enemy-y c)
+                                            (large-enemy-vel c)
+                                            (large-enemy-xvel c))]
+        [(FriendlyCar? c) (make-FriendlyCar (- (FriendlyCar-x c) 10)
+                                            (FriendlyCar-y c)
+                                            (FriendlyCar-vel c))]
+        [(hlpr-truck? c) (make-hlpr-truck (- (hlpr-truck-x c) 10)
+                                          (hlpr-truck-y c)
+                                          (hlpr-truck-gadget c)
+                                          (hlpr-truck-vel c)
+                                          (hlpr-truck-xvel c)
+                                          (hlpr-truck-d c))]))
+;; bounce-right: car --> car
+;; moves the car 10 pixels to the right
+(check-expect (bounce-right spy1) (make-spy 310 400 0 0 0))
+(check-expect (bounce-right (make-small-enemy 120 899 20 10))
+              (make-small-enemy 130 899 20 10))
+(check-expect (bounce-right (make-large-enemy 328 391 -15 0))
+              (make-large-enemy 338 391 -15 0))
+(check-expect (bounce-right (make-FriendlyCar 110 367 -15))
+              (make-FriendlyCar 120 367 -15))
+(check-expect (bounce-right (make-hlpr-truck 330 355 'ss 7 0 'f))
+              (make-hlpr-truck 340 355 'ss 7 0 'f))
+(define (bounce-right c)
+  (cond [(spy? c) (make-spy (+ (spy-x c) 10) (spy-y c) (spy-vel c)
+                            (spy-osleft c)
+                            (spy-ssleft c))]
+        [(small-enemy? c) (make-small-enemy (+ (small-enemy-x c) 10)
+                                            (small-enemy-y c)
+                                            (small-enemy-vel c)
+                                            (small-enemy-xvel c))]
+        [(large-enemy? c) (make-large-enemy (+ (large-enemy-x c) 10)
+                                            (large-enemy-y c)
+                                            (large-enemy-vel c)
+                                            (large-enemy-xvel c))]
+        [(FriendlyCar? c) (make-FriendlyCar (+ (FriendlyCar-x c) 10)
+                                            (FriendlyCar-y c)
+                                            (FriendlyCar-vel c))]
+        [(hlpr-truck? c) (make-hlpr-truck (+ (hlpr-truck-x c) 10)
+                                          (hlpr-truck-y c)
+                                          (hlpr-truck-gadget c)
+                                          (hlpr-truck-vel c)
+                                          (hlpr-truck-xvel c)
+                                          (hlpr-truck-d c))]))
+;; bounce-up: car --> car
+;; moves the car up 10 pixels
+(check-expect (bounce-up spy1) (make-spy 300 390 0 0 0))
+(check-expect (bounce-up (make-small-enemy 120 899 20 10))
+              (make-small-enemy 120 889 20 10))
+(check-expect (bounce-up (make-large-enemy 328 391 -15 0))
+              (make-large-enemy 328 381 -15 0))
+(check-expect (bounce-up (make-FriendlyCar 110 367 -15))
+              (make-FriendlyCar 110 357 -15))
+(check-expect (bounce-up (make-hlpr-truck 330 355 'ss 7 0 'f))
+              (make-hlpr-truck 330 345 'ss 7 0 'f))
+(define (bounce-up c)
+  (cond [(spy? c) (make-spy (spy-x c) (- (spy-y c) 10) (spy-vel c)
+                            (spy-osleft c)
+                            (spy-ssleft c))]
+        [(small-enemy? c) (make-small-enemy (small-enemy-x c)
+                                            (- (small-enemy-y c) 10)
+                                            (small-enemy-vel c)
+                                            (small-enemy-xvel c))]
+        [(large-enemy? c) (make-large-enemy (large-enemy-x c)
+                                            (- (large-enemy-y c) 10)
+                                            (large-enemy-vel c)
+                                            (large-enemy-xvel c))]
+        [(FriendlyCar? c) (make-FriendlyCar (FriendlyCar-x c)
+                                            (- (FriendlyCar-y c) 10)
+                                            (FriendlyCar-vel c))]
+        [(hlpr-truck? c) (make-hlpr-truck (hlpr-truck-x c)
+                                          (- (hlpr-truck-y c) 10)
+                                          (hlpr-truck-gadget c)
+                                          (hlpr-truck-vel c)
+                                          (hlpr-truck-xvel c)
+                                          (hlpr-truck-d c))]))
+;; bounce-down: car --> car
+;; moves the car down 10 pixels
+(check-expect (bounce-down spy1) (make-spy 300 410 0 0 0))
+(check-expect (bounce-down (make-small-enemy 120 899 20 10))
+              (make-small-enemy 120 909 20 10))
+(check-expect (bounce-down (make-large-enemy 328 391 -15 0))
+              (make-large-enemy 328 401 -15 0))
+(check-expect (bounce-down (make-FriendlyCar 110 367 -15))
+              (make-FriendlyCar 110 377 -15))
+(check-expect (bounce-down (make-hlpr-truck 330 355 'ss 7 0 'f))
+              (make-hlpr-truck 330 365 'ss 7 0 'f))
+(define (bounce-down c)
+  (cond [(spy? c) (make-spy (spy-x c) (+ (spy-y c) 10) (spy-vel c)
+                            (spy-osleft c)
+                            (spy-ssleft c))]
+        [(small-enemy? c) (make-small-enemy (small-enemy-x c)
+                                            (+ (small-enemy-y c) 10)
+                                            (small-enemy-vel c)
+                                            (small-enemy-xvel c))]
+        [(large-enemy? c) (make-large-enemy (large-enemy-x c)
+                                            (+ (large-enemy-y c) 10)
+                                            (large-enemy-vel c)
+                                            (large-enemy-xvel c))]
+        [(FriendlyCar? c) (make-FriendlyCar (FriendlyCar-x c)
+                                            (+ (FriendlyCar-y c) 10)
+                                            (FriendlyCar-vel c))]
+        [(hlpr-truck? c) (make-hlpr-truck (hlpr-truck-x c)
+                                          (+ (hlpr-truck-y c) 10)
+                                          (hlpr-truck-gadget c)
+                                          (hlpr-truck-vel c)
+                                          (hlpr-truck-xvel c)
+                                          (hlpr-truck-d c))]))
+;; spy-collision: spy car --> spy
+;; if spy collides with car, it bounces spy
+;; spy will bounce in the opposite direction of the car it collides with
+(check-expect (spy-collision spy1 (make-small-enemy 300 400 0 0))
+              (make-spy 310 400 0 0 0))
+(check-expect (spy-collision spy1 (make-large-enemy 299 400 0 0))
+              (make-spy 310 400 0 0 0))
+(check-expect (spy-collision spy1 (make-FriendlyCar 301 400 0))
+              (make-spy 290 400 0 0 0))
+(check-expect (spy-collision spy1 (make-FriendlyCar 500 400 0))
+              (make-spy 300 400 0 0 0))
+(check-expect (spy-collision spy1 (make-hlpr-truck 3 2 'os 2 4 't))
+              spy1)
+(define (spy-collision s c)
+  (cond [(small-enemy? c) (if (overlapping? (compute-ltrb (spy-x s)
+                                                          (spy-y s)
+                                                          spy-car)
+                                            (compute-ltrb (small-enemy-x c)
+                                                          (small-enemy-y c)
+                                                          sml-enemy))
+                              (if (>= (spy-x s) (small-enemy-x c))
+                                  (bounce-right s)
+                                  (bounce-left s))
+                              s)]
+        [(large-enemy? c) (if (overlapping? (compute-ltrb (spy-x s)
+                                                          (spy-y s)
+                                                          spy-car)
+                                            (compute-ltrb (large-enemy-x c)
+                                                          (large-enemy-y c)
+                                                          lrg-enemy))
+                              (if (>= (spy-x s) (large-enemy-x c))
+                                  (bounce-right s)
+                                  (bounce-left s))
+                              s)]
+        [(FriendlyCar? c) (if (overlapping? (compute-ltrb (spy-x s)
+                                                          (spy-y s)
+                                                          spy-car)
+                                            (compute-ltrb (FriendlyCar-x c)
+                                                          (FriendlyCar-y c)
+                                                          frnd))
+                              (if (>= (spy-x s) (FriendlyCar-x c))
+                                  (bounce-right s)
+                                  (bounce-left s))
+                              s)]
+        [(hlpr-truck? c) s]
+        [else s]))
+;; spy-collisionLOO: spy LOC --> spy
+;; bounces spy if it collides with any car in the shg's LOO (filtered to LOC)
+(define (spy-collisionLOO s ls)
+  (cond [(empty? ls) s]
+        [(cons? ls) (spy-collisionLOO (spy-collision s (first ls))
+                                      (rest ls))]))
+;; collision-spyLOO: spy LOO --> LOO
+;; bounces all cars in LOO hit by spy
+(define (collision-spyLOO s ls)
+  (cond [(empty? ls) empty]
+        [(cons? ls) (cons (collision-wspy (first ls) s)
+                          (collision-spyLOO s (rest ls)))]))
+;;collision-cars: object LOO --> object
+;; collides the car with all the cars in LOO
+(define (collision-cars o ls)
+  (cond [(empty? ls) o]
+        [(cons? ls) (collision-cars (collision-car o (first ls)) (rest ls))]))
+;; collision-LOO: LOC --> LOC
+;; bounces cars in the LOO (filtered to LOC)
+;; by the cars further down in the list
+#;(define (collision-LOO ls)
+    (cond [(empty?  ls) empty]
+          [(empty? (rest ls)) ls]
+          [(cons? (rest ls)) (cons (collision-car (first ls) (second ls))
+                                   (collision-LOO (rest ls)))]))
+(define (collision-LOO ls)
+  (cond [(empty?  ls) empty]
+        [(cons? ls) (cons (collision-cars (first ls) (rest ls))
+                          (collision-LOO (rest ls)))]))
+;; handle-collision: shg --> shg
+;; handles all the collisions in an shg
+#;(define (handle-collisions sg)
+    (make-shg (shg-lives sg)
+              (shg-score sg)
+              (spy-collisionLOO (shg-spy sg) (shg-objects sg))
+              (collision-spyLOO (shg-spy sg) (collision-LOO (shg-objects sg)))
+              (shg-shots sg)
+              (shg-dtop sg)))
+(define (handle-collisions sg)
+  (local ((define bSpy (spy-collisionLOO (shg-spy sg) (shg-objects sg))))
+    (make-shg (shg-lives sg)
+              (shg-score sg)
+              bSpy
+              (collision-spyLOO (shg-spy sg) (collision-LOO (shg-objects sg)))
+              (shg-shots sg)
+              (shg-dtop sg))))
+;; helper
+;; car?: any --> Boolean
+(define (car? a)
+  (or (small-enemy? a)
+      (large-enemy? a)
+      (FriendlyCar? a)
+      (hlpr-truck? a)
+      (spy? a)))
+;; collision-wspy: object spy --> object
+;; bounces the car if it touches spy
+(define (collision-wspy c s)
+  (if (hlpr-truck? c)
+      c
+      (local ((define sx (spy-x s))
+              (define sy (spy-y s))
+              (define cIMG (cond [(small-enemy? c)
+                                  sml-enemy]
+                                 [(large-enemy? c)
+                                  lrg-enemy]
+                                 [(FriendlyCar? c)
+                                  frnd]
+                                 [(hlpr-truck? c)
+                                  truck]
+                                 [else c]))
+              (define theX (cond [(small-enemy? c)
+                                  (small-enemy-x c)]
+                                 [(large-enemy? c)
+                                  (large-enemy-x c)]
+                                 [(FriendlyCar? c)
+                                  (FriendlyCar-x c)]
+                                 [(hlpr-truck? c)
+                                  (hlpr-truck-x c)]
+                                 [else c]))
+              (define theY (cond [(small-enemy? c)
+                                  (small-enemy-y c)]
+                                 [(large-enemy? c)
+                                  (large-enemy-y c)]
+                                 [(FriendlyCar? c)
+                                  (FriendlyCar-y c)]
+                                 [(hlpr-truck? c)
+                                  (hlpr-truck-y c)]
+                                 [else c])))
+        (if (and (car? c)
+                 (touching? (compute-ltrb sx sy spy-car)
+                            (compute-ltrb theX theY cIMG)))
+            (cond [(and (>= sx theX) (<= sy theY))
+                   (bounce-down (bounce-left c))]
+                  [(and (>= sx theX) (>= sy theY))
+                   (bounce-up (bounce-left c))]
+                  [(and (<= sx theX) (<= sy theY))
+                   (bounce-down (bounce-right c))]
+                  [(and (<= sx theX) (>= sy theY))
+                   (bounce-up (bounce-right c))]
+                  [else c])
+            c))))
+
+;; same-car?: car car --> Boolean
+;; determines if they are the same car
+(define (same-car? c1 c2)
+  (or
+   (and (small-enemy? c1) (small-enemy? c2)
+        (= (small-enemy-x c1) (small-enemy-x c2))
+        (= (small-enemy-y c1) (small-enemy-y c2))
+        (= (small-enemy-vel c1) (small-enemy-vel c2))
+        (= (small-enemy-xvel c1) (small-enemy-xvel c2)))
+   
+   (and (FriendlyCar? c1) (FriendlyCar? c2)
+        (= (FriendlyCar-x c1) (FriendlyCar-x c2))
+        (= (FriendlyCar-y c1) (FriendlyCar-y c2))
+        (= (FriendlyCar-vel c1) (FriendlyCar-vel c2)))
+   (and (hlpr-truck? c1) (hlpr-truck? c2))
+   (and (spy? c1) (spy? c2))))
+
+
+;; collision-car: object object --> object
+;; bounces 1st car accordingto its position in relationship to 2nd car's pos.
+(define (collision-car c1 c2)
+  (local ((define c1IMG (cond [(small-enemy? c1)
+                               sml-enemy]
+                              [(large-enemy? c1)
+                               lrg-enemy]
+                              [(FriendlyCar? c1)
+                               frnd]
+                              [(hlpr-truck? c1)
+                               truck]
+                              [else c1]))
+          (define c2IMG (cond [(small-enemy? c2)
+                               sml-enemy]
+                              [(large-enemy? c2)
+                               lrg-enemy]
+                              [(FriendlyCar? c2)
+                               frnd]
+                              [(hlpr-truck? c2)
+                               truck]
+                              [else c2]))
+          (define c1X (cond [(small-enemy? c1)
+                             (small-enemy-x c1)]
+                            [(large-enemy? c1)
+                             (large-enemy-x c1)]
+                            [(FriendlyCar? c1)
+                             (FriendlyCar-x c1)]
+                            [(hlpr-truck? c1)
+                             (hlpr-truck-x c1)]
+                            [else c1]))
+          (define c1Y (cond [(small-enemy? c1)
+                             (small-enemy-x c1)]
+                            [(large-enemy? c1)
+                             (large-enemy-x c1)]
+                            [(FriendlyCar? c1)
+                             (FriendlyCar-x c1)]
+                            [(hlpr-truck? c1)
+                             (hlpr-truck-x c1)]
+                            [else c1]))
+          (define c2X (cond [(small-enemy? c2)
+                             (small-enemy-x c2)]
+                            [(large-enemy? c2)
+                             (large-enemy-x c2)]
+                            [(FriendlyCar? c2)
+                             (FriendlyCar-x c2)]
+                            [(hlpr-truck? c2)
+                             (hlpr-truck-x c2)]
+                            [else c2]))
+          (define c2Y (cond [(small-enemy? c2)
+                             (small-enemy-y c2)]
+                            [(large-enemy? c2)
+                             (large-enemy-y c2)]
+                            [(FriendlyCar? c2)
+                             (FriendlyCar-y c2)]
+                            [(hlpr-truck? c2)
+                             (hlpr-truck-y c2)]
+                            [else c2])))
+    (if (and (car? c1) (car? c2) (not (same-car? c1 c2))
+             (touching? (compute-ltrb c1X c1Y c1IMG)
+                        (compute-ltrb c2X c2Y c2IMG)))
+        (cond [(and (>= c1X c2X) (<= c1Y c2Y))
+               (bounce-down (bounce-left c1))]
+              [(and (>= c1X c2X) (>= c1Y c2Y))
+               (bounce-up (bounce-left c1))]
+              [(and (<= c1X c2X) (<= c1Y c2Y))
+               (bounce-down (bounce-right c1))]
+              [(and (<= c1X c2X) (>= c1Y c2Y))
+               (bounce-up (bounce-right c1))])
+        c1)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;                                            
 ;                        ;                   
