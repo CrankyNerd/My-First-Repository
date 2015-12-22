@@ -194,11 +194,6 @@
 (define frnd-vel 20)
 |#
 
-; Terrain
-(define terrain (beside (rectangle (* 1/6 W) (* 1/4 H) 'solid 'green)
-                        (rectangle (* 2/3 W) (* 1/4 H) 'solid 'black)
-                        (rectangle (* 1/6 W) (* 1/4 H) 'solid 'green)))
-
 ;; a spy is a
 ;; (make-spy Num Num Nat Num Num)
 (define-struct spy [x y vel osleft ssleft])
@@ -635,7 +630,7 @@
                         (cons (first ls) (no-os (rest ls))))]))
 ;; draw-bg: shg --> Image
 ;; draws the bg with proper dimensions using the BG
-#;#;#;(check-expect (draw-bg shg1) (above (crop 0 (- (image-height BG) 10) W 10
+(check-expect (draw-bg shg1) (above (crop 0 (- (image-height BG) 10) W 10
                                                 BG)
                                           (crop 0 0 W (- H 10) BG)))
 (check-expect (draw-bg shg4) (crop 0 900 W H BG))
