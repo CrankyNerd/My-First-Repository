@@ -1,0 +1,1 @@
+("6.1.1" ("8d90851cc2fd46672e51cf1a9c668d23df2167cb" . "14e9631952645943ad7ea0c258a258a7db0f2faa") #"/Users/Gavin/Gavin's Work 12th grade/Prog/GitHub/My-First-Repository/constants.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"2htdp" #"image.rkt"))
