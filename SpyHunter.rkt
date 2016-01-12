@@ -70,20 +70,11 @@ TODO diagnose collision bug
 (define spy2 (spy 200 400 11 2 3))
 (define starting-spy (spy 300 400 5 0 0))
 
-;; an object is one of
-;; - FriendlyCar
-;; - small-enemy
-;; - large-enemy
-;; - hlpr-truck
-;; - oilslick
-;; - smokescreen
-;; - crash
-
 ;; A Vehicle is a
 ;;    (vehicle Nat Int Int Int)
 ;; where x is the vehicle's x-coordinate
-;;       y is the vehicle's y-coordinate and
-;;      dx is the vehicle's x velocity
+;;       y is the vehicle's y-coordinate
+;;      dx is the vehicle's x velocity and
 ;;      dy is the vehicle's y velocity
 (struct vehicle [x y dx dy] #:transparent)
 
@@ -105,6 +96,10 @@ TODO diagnose collision bug
 ;;   gadgets --> 'smokescreen or 'oilslick
 ;; loading-spy-car? : #t iff the spy car is in position to be loaded.
 
+;; a Listof[vehicles] (LOV) is either
+;; empty
+;; (cons vehicle LOV)
+
 ;; vehicle-type : vehicle -> VehicleType
 ;; produces a symbol identifying the kind of vehicle: one of these:
 ;;  'friendly 'small-enemy 'large-enemy 'truck
@@ -118,28 +113,28 @@ TODO diagnose collision bug
 
 ;; AList[VehicleType, Int+]
 (define VEHICLE-WIDTHS
-  '((friendly 40)
-    (small-enemy 40)
-    (large-enemy 55)
-    (truck 40)))
+  '((friendly 33)
+    (small-enemy 33)
+    (large-enemy 46)
+    (truck 33)))
 
 (define VEHICLE-HEIGHTS
-  '((friendly 100)
-    (small-enemy 100)
-    (large-enemy 120)
-    (truck 200)))
+  '((friendly 53)
+    (small-enemy 53)
+    (large-enemy 62)
+    (truck 109)))
 
 (define VEHICLE-IMAGES
   `((friendly ,frnd)
     (small-enemy ,sml-enemy)
     (large-enemy ,lrg-enemy)
     (truck ,truck)
-    )) ;; TODO complete this table (add spy to vehicle?)
+    )) ;; TODO complete this table
 
 ;; vehicle-width : vehicle -> Int+
 (define (vehicle-width v) (vehicle-lookup v VEHICLE-WIDTHS))
 (define (vehicle-height v) (vehicle-lookup v VEHICLE-HEIGHTS))
-;; TODO add vehicle-image
+(define (vehicle-image v) (vehicle-lookup v VEHICLE-IMAGES))
 
 ;; vehicle-lookup : vehicle AList[VehicleType, x] --> x
 (define (vehicle-lookup v table)
@@ -148,6 +143,20 @@ TODO diagnose collision bug
         [else
          (error 'vehicle-lookup "unknown vehicle")]))
 
+;; a crash is a 
+;; (crash Num Num Num Num Image)
+(struct crash [x y dx dy img] #:transparent) ;; wanted to make this a crash,
+;; but I can't figure out how to deal with the image changing
+
+;; oilslick is a 
+;; (make-os Num Num)
+(struct os [x y] #:transparent)
+;; where x is the oilslick's x coordinate and
+;;       y is the oilslick's y coordinate
+
+;; smokescreen is a 
+;; (make-ss x y Num)
+(struct ss [x y duration])
 
 ;; shot is a
 ;; (shot Num Num
@@ -157,20 +166,6 @@ TODO diagnose collision bug
 (define shot1 (shot 150 380))
 (define shot2 (shot 150 360))
 (define shot3 (shot 150 340))
-
-;; oilslick is a 
-;; (os Num Num)
-(define-struct os [x y] #:transparent)
-;; where x is the oilslick's x coordinate and
-;;       y is the oilslick's y coordinate
-
-;; smokescreen is a 
-;; (ss x y Num)
-(define-struct ss [x y duration] #:transparent)
-
-;; a crash is a 
-;; (crash Image Num Num Num Num)
-(define-struct crash [img x y xvel vel] #:transparent)
 
 ;; a List-of[Objects] (LOO) is one of:
 ;; empty
@@ -187,7 +182,7 @@ TODO diagnose collision bug
                    (large-enemy 300 200 0 2)
                    (hlpr-truck 200 150 -2 3 'os #f)
                    (FriendlyCar 400 150 0 5)
-                   (crash sml-enemy 200 460 25 -5)))
+                   (crash 200 460 -5 25 sml-enemy)))
 
 ;; a Listof[Num] (LON) is either
 ;; empty
@@ -1033,10 +1028,9 @@ TODO diagnose collision bug
   (cond [(empty? ls) #f]
         [(cons? ls)
          (or (overlapping?
-              (compute-ltrb (vehicle-x se) (vehicle-y se) sml-enemy)
+              (vehicle->ltrb se)
               (compute-ltrb (shot-x (first ls)) (shot-y (first ls))
-                            player-shot)
-              )
+                            player-shot))
              (sml-enemy-hit? se (rest ls)))]))
 
 ;; remove-sml-enemies: LOO LOS --> LOO
@@ -1182,48 +1176,15 @@ TODO diagnose collision bug
 ;; crashed?: object gadget --> Boolean
 ;; determines if the object collided with a gadget
 (define (crashed? o g)
-  (cond [(small-enemy? o) (if (os? g)
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       sml-enemy)
-                                         (compute-ltrb (os-x g)
-                                                       (os-y g)
-                                                       os-image))
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       sml-enemy)
-                                         (compute-ltrb (ss-x g)
-                                                       (ss-y g)
-                                                       ss-image)))]
-        [(large-enemy? o) (if (os? g)
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       lrg-enemy)
-                                         (compute-ltrb (os-x g)
-                                                       (os-y g)
-                                                       os-image))
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       sml-enemy)
-                                         (compute-ltrb (ss-x g)
-                                                       (ss-y g)
-                                                       ss-image)))]
-        [(FriendlyCar? o) (if (os? g)
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       frnd)
-                                         (compute-ltrb (os-x g)
-                                                       (os-y g)
-                                                       os-image))
-                              (touching? (compute-ltrb (vehicle-x o)
-                                                       (vehicle-y o)
-                                                       frnd)
-                                         (compute-ltrb (ss-x g)
-                                                       (ss-y g)
-                                                       ss-image)))]
-        [else #f]))
+  (if (vehicle? o)
+      (if (os? g)
+      (touching? (vehicle->ltrb o)
+                 (compute-ltrb (os-x g) (os-y g) os-image))
+      (touching? (vehicle->ltrb o)
+                 (compute-ltrb (ss-x g) (ss-y g) ss-image)))
+      #f))
 
-;; apply-crash: spy gadget LOO --> LOO
+;; apply-crash: spy gadget LOV --> LOO
 ;; replaces hit objects with a crash
 (check-within (apply-crash (spy 200 400 11 2 3) (os 300 200)
                            (list (small-enemy 300 790 0 2)
@@ -1232,7 +1193,7 @@ TODO diagnose collision bug
                                  (FriendlyCar 400 150 0 5)))
               (list
                (small-enemy 300 790 0 2)
-               (crash lrg-enemy 300 200 11 0)
+               (crash 300 200 0 11 lrg-enemy)
                (hlpr-truck 200 150 -2 3'os #f)
                (FriendlyCar 400 150 0 5))
               5)
@@ -1242,7 +1203,7 @@ TODO diagnose collision bug
                                  (hlpr-truck 200 150 -2 3 'os #f)
                                  (FriendlyCar 400 150 0 5)))
               (list
-               (crash sml-enemy 300 790 11 0)
+               (crash 300 790 0 11 sml-enemy)
                (large-enemy 300 200 0 2)
                (hlpr-truck 200 150 -2 3 'os #f)
                (FriendlyCar 400 150 0 5))
@@ -1266,7 +1227,7 @@ TODO diagnose collision bug
                (small-enemy 300 790 0 2)
                (large-enemy 300 200 0 2)
                (hlpr-truck 200 150 -2 3 'os #f)
-               (crash frnd 400 150 11 0))
+               (crash 400 150 0 11 frnd))
               5)
 (check-within (apply-crash (spy 200 400 11 2 3) (os 400 150)
                            (list (small-enemy 425 130 0 2)
@@ -1274,38 +1235,25 @@ TODO diagnose collision bug
                                  (hlpr-truck 200 150 -2 3 'os #f)
                                  (FriendlyCar 400 150 0 5)))
               (list
-               (crash sml-enemy 425 130 11 0)
+               (crash 425 130 0 11 sml-enemy)
                (large-enemy 300 200 0 2)
                (hlpr-truck 200 150 -2 3 'os #f)
-               (crash frnd 400 150 11 0))
+               (crash 400 150 0 11 frnd))
               5)
 (define (apply-crash s g ls)
-  (cond [(empty? ls) empty]
+  (cond [(empty? ls) (cons g empty)]
         [(cons? ls) (if (crashed? (first ls) g)
                         (cons
-                         (cond [(small-enemy? (first ls))
-                                (crash sml-enemy
-                                       (vehicle-x (first ls))
-                                       (vehicle-y (first ls))
-                                       (clamp 5 (spy-vel s) MAX-VEL)
-                                       (- (random 11) 5))]
-                               [(large-enemy? (first ls))
-                                (crash lrg-enemy
-                                       (vehicle-x (first ls))
-                                       (vehicle-y (first ls))
-                                       (clamp 5 (spy-vel s) MAX-VEL)
-                                       (- (random 11) 5))]
-                               [(FriendlyCar? (first ls))
-                                (crash frnd
-                                       (vehicle-x (first ls))
-                                       (vehicle-y (first ls))
-                                       (clamp 5 (spy-vel s) MAX-VEL)
-                                       (- (random 11) 5))])
+                         (crash (vehicle-x (first ls))
+                                (vehicle-y (first ls))
+                                (clamp 5 (spy-vel s) MAX-VEL)
+                                (- (random 11) 5)
+                                (vehicle-lookup (vehicle-type (first ls))
+                                                VEHICLE-IMAGES))
                          (apply-crash s g (rest ls)))
-                        (cons (first ls)
-                              (apply-crash s g (rest ls))))]))
+                        (cons (first ls) (apply-crash s g (rest ls))))]))
 
-;; apply-crashes: spy LOG LOO --> LOO
+;; apply-crashes: spy LOG LOV --> LOO
 ;; replaces all objects hit by gadgets with crashes
 (check-expect (apply-crashes spy2
                              empty
@@ -1324,7 +1272,7 @@ TODO diagnose collision bug
                                    (hlpr-truck 200 150 -2 3 'os #f)
                                    (FriendlyCar 400 150 0 5)))
               (list (small-enemy 300 790 0 2)
-                    (crash lrg-enemy 300 200 11 0)
+                    (crash 300 200 0 11 lrg-enemy)
                     (hlpr-truck 200 150 -2 3 'os #f)
                     (FriendlyCar 400 150 0 5))
               5)
@@ -1337,7 +1285,7 @@ TODO diagnose collision bug
                                    (hlpr-truck 200 150 -2 3 'os #f)
                                    (FriendlyCar 400 150 0 5)))
               (list
-               (crash sml-enemy 300 790 0 11)
+               (crash 300 790 0 11 sml-enemy)
                (crash lrg-enemy 300 200 0 11)
                (hlpr-truck 200 150 -2 3 'os #f)
                (FriendlyCar 400 150 0 5))
@@ -1358,19 +1306,19 @@ TODO diagnose collision bug
   (shg (shg-lives sg)
        (shg-score sg)
        (shg-spy sg)
-       (apply-crashes (shg-spy sg) (filter gadget? (shg-objects sg))
-                      (shg-objects sg))
+       (append (apply-crashes (shg-spy sg) (filter gadget? (shg-objects sg))
+                      (filter vehicle? (shg-objects sg))))
        (shg-shots sg)
        (shg-dtop sg)))
 
 ;; move-crash: crash --> crash
 ;; moves a crash according to its velocities.
 (define (move-crash c)
-  (crash (crash-img c)
-         (+ (crash-x c) (crash-xvel c))
-         (+ (crash-y c) (crash-vel c))
-         (crash-vel c)
-         (crash-xvel c)))
+  (crash (+ (crash-x c) (crash-dx c))
+         (+ (crash-y c) (crash-dy c))
+         (crash-dx c)
+         (crash-dy c)
+         (crash-img c)))
 ;; move-crashinLOO: LOO --> LOO
 ;; moves all the crashes in the LOO
 (define (move-crashinLOO ls)
@@ -2237,7 +2185,7 @@ TODO diagnose collision bug
                                      (vehicle-dy c)
                                      (hlpr-truck-gadget c)
                                      (hlpr-truck-loading-spy-car? c))]))
-;; spy-collision: spy car --> spy
+;; spy-collision: spy object --> spy
 ;; if spy collides with car, it bounces spy
 ;; spy will bounce in the opposite direction of the car it collides with
 (check-expect (spy-collision spy1 (small-enemy 300 400 0 0))
@@ -2251,37 +2199,14 @@ TODO diagnose collision bug
 (check-expect (spy-collision spy1 (hlpr-truck 3 2 4 2 'os #t))
               spy1)
 (define (spy-collision s c)
-  (cond [(small-enemy? c) (if (overlapping? (compute-ltrb (spy-x s)
-                                                          (spy-y s)
-                                                          spy-car)
-                                            (compute-ltrb (vehicle-x c)
-                                                          (vehicle-y c)
-                                                          sml-enemy))
-                              (if (>= (spy-x s) (vehicle-x c))
-                                  (bounce-right s)
-                                  (bounce-left s))
-                              s)]
-        [(large-enemy? c) (if (overlapping? (compute-ltrb (spy-x s)
-                                                          (spy-y s)
-                                                          spy-car)
-                                            (compute-ltrb (vehicle-x c)
-                                                          (vehicle-y c)
-                                                          lrg-enemy))
-                              (if (>= (spy-x s) (vehicle-x c))
-                                  (bounce-right s)
-                                  (bounce-left s))
-                              s)]
-        [(FriendlyCar? c) (if (overlapping? (compute-ltrb (spy-x s)
-                                                          (spy-y s)
-                                                          spy-car)
-                                            (compute-ltrb (vehicle-x c)
-                                                          (vehicle-y c)
-                                                          frnd))
-                              (if (>= (spy-x s) (vehicle-x c))
-                                  (bounce-right s)
-                                  (bounce-left s))
-                              s)]
-        [(hlpr-truck? c) s]
+  (cond [(hlpr-truck? c) s]
+        [(vehicle? c)
+         (if (touching? (compute-ltrb (spy-x s) (spy-y s) spy-car)
+                          (vehicle->ltrb c))
+            (if (>= (spy-x s) (vehicle-x c))
+                (bounce-right s)
+                (bounce-left s))
+            s)]
         [else s]))
 ;; spy-collisionLOO: spy LOC --> spy
 ;; bounces spy if it collides with any car in the shg's LOO (filtered to LOC)
